@@ -120,6 +120,10 @@ namespace Coupon.Helpers
                     return null;
                 }
 
+                // FEATURE: Strip leading slashes from parameter values
+                // Fix for /Central.aspx?id=/ABC123 -> /Central.aspx?id=ABC123
+                value = value.TrimStart('/');
+
                 // Limit length to prevent buffer overflow
                 if (value.Length > maxLength)
                 {
