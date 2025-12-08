@@ -360,10 +360,29 @@ namespace Coupon.Helpers
 
         /// <summary>
         /// Handle redirect with redemption action
+        /// Supports CutSlashfromRedirect config to remove trailing slashes
         /// </summary>
         protected void RedirectToRedemption()
         {
-            Response.Redirect(HttpContext.Current.Request.Url.AbsoluteUri + "&action=Redeem");
+            string url = HttpContext.Current.Request.Url.AbsoluteUri;
+
+            // FEATURE: Support CutSlashfromRedirect config
+            // If enabled, remove trailing slash before adding action parameter
+            string cutSlash = System.Configuration.ConfigurationManager.AppSettings["CutSlashfromRedirect"];
+            if (!string.IsNullOrEmpty(cutSlash) &&
+                (cutSlash.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
+                 cutSlash.Equals("True", StringComparison.OrdinalIgnoreCase)))
+            {
+                // Remove trailing slash from URL before query string
+                // Example: /Central.aspx/?id=123 -> /Central.aspx?id=123
+                int queryStart = url.IndexOf('?');
+                if (queryStart > 0 && url[queryStart - 1] == '/')
+                {
+                    url = url.Substring(0, queryStart - 1) + url.Substring(queryStart);
+                }
+            }
+
+            Response.Redirect(url + "&action=Redeem");
         }
     }
 }

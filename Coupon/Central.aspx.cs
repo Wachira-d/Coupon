@@ -324,7 +324,25 @@ namespace Coupon
 
         protected void Button1_Click(object sender, EventArgs e)
         {
-            Response.Redirect(HttpContext.Current.Request.Url.AbsoluteUri+"&action=Redeem");
+            // Use helper method that supports CutSlashfromRedirect config
+            string url = HttpContext.Current.Request.Url.AbsoluteUri;
+
+            // FEATURE: Support CutSlashfromRedirect config
+            string cutSlash = System.Configuration.ConfigurationManager.AppSettings["CutSlashfromRedirect"];
+            if (!string.IsNullOrEmpty(cutSlash) &&
+                (cutSlash.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
+                 cutSlash.Equals("True", StringComparison.OrdinalIgnoreCase)))
+            {
+                // Remove trailing slash from URL before query string
+                // Example: /Central.aspx/?id=123 -> /Central.aspx?id=123
+                int queryStart = url.IndexOf('?');
+                if (queryStart > 0 && url[queryStart - 1] == '/')
+                {
+                    url = url.Substring(0, queryStart - 1) + url.Substring(queryStart);
+                }
+            }
+
+            Response.Redirect(url + "&action=Redeem");
         }
     }
 }
