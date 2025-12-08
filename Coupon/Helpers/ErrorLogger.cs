@@ -11,6 +11,7 @@ namespace Coupon.Helpers
     public static class ErrorLogger
     {
         private static readonly string LogPath = GetLogPath();
+        private static readonly bool UseFixedLogFile = IsFixedLogFile();
 
         private static string GetLogPath()
         {
@@ -24,18 +25,48 @@ namespace Coupon.Helpers
                            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
                 }
 
-                if (!Directory.Exists(path))
+                // Check if LogPath is a file path (has extension like .txt, .log)
+                string extension = Path.GetExtension(path);
+                if (!string.IsNullOrEmpty(extension))
                 {
-                    Directory.CreateDirectory(path);
+                    // It's a file path - ensure directory exists
+                    string directory = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+                    return path;
                 }
-
-                return path;
+                else
+                {
+                    // It's a folder path - ensure folder exists
+                    if (!Directory.Exists(path))
+                    {
+                        Directory.CreateDirectory(path);
+                    }
+                    return path;
+                }
             }
             catch
             {
                 // Fallback to temp directory if all else fails
                 return Path.GetTempPath();
             }
+        }
+
+        private static bool IsFixedLogFile()
+        {
+            try
+            {
+                string path = ConfigurationManager.AppSettings["LogPath"];
+                if (!string.IsNullOrEmpty(path))
+                {
+                    string extension = Path.GetExtension(path);
+                    return !string.IsNullOrEmpty(extension);
+                }
+            }
+            catch { }
+            return false;
         }
 
         /// <summary>
@@ -46,10 +77,21 @@ namespace Coupon.Helpers
             try
             {
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                string logFileName = $"Error_{DateTime.Now:yyyyMMdd}.log";
-                string logFilePath = Path.Combine(LogPath, logFileName);
+                string logFilePath;
 
-                string logMessage = $"[{timestamp}] {message}\n";
+                if (UseFixedLogFile)
+                {
+                    // Use the fixed file path from config
+                    logFilePath = LogPath;
+                }
+                else
+                {
+                    // Use daily rotating log files
+                    string logFileName = $"Error_{DateTime.Now:yyyyMMdd}.log";
+                    logFilePath = Path.Combine(LogPath, logFileName);
+                }
+
+                string logMessage = $"[{timestamp}] ERROR: {message}\n";
 
                 if (ex != null)
                 {
@@ -103,8 +145,19 @@ namespace Coupon.Helpers
             try
             {
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                string logFileName = $"Warning_{DateTime.Now:yyyyMMdd}.log";
-                string logFilePath = Path.Combine(LogPath, logFileName);
+                string logFilePath;
+
+                if (UseFixedLogFile)
+                {
+                    // Use the fixed file path from config
+                    logFilePath = LogPath;
+                }
+                else
+                {
+                    // Use daily rotating log files
+                    string logFileName = $"Warning_{DateTime.Now:yyyyMMdd}.log";
+                    logFilePath = Path.Combine(LogPath, logFileName);
+                }
 
                 string logMessage = $"[{timestamp}] WARNING: {message}\n";
 
@@ -131,8 +184,19 @@ namespace Coupon.Helpers
             try
             {
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                string logFileName = $"Info_{DateTime.Now:yyyyMMdd}.log";
-                string logFilePath = Path.Combine(LogPath, logFileName);
+                string logFilePath;
+
+                if (UseFixedLogFile)
+                {
+                    // Use the fixed file path from config
+                    logFilePath = LogPath;
+                }
+                else
+                {
+                    // Use daily rotating log files
+                    string logFileName = $"Info_{DateTime.Now:yyyyMMdd}.log";
+                    logFilePath = Path.Combine(LogPath, logFileName);
+                }
 
                 string logMessage = $"[{timestamp}] INFO: {message}\n";
 
