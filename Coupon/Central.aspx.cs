@@ -309,6 +309,22 @@ namespace Coupon
             {
                 image = null;
 
+                // Ensure directory exists before saving
+                string directory = System.IO.Path.GetDirectoryName(fileSaveUrl);
+                if (!string.IsNullOrEmpty(directory) && !System.IO.Directory.Exists(directory))
+                {
+                    try
+                    {
+                        System.IO.Directory.CreateDirectory(directory);
+                        ErrorLogger.LogInfo("Created barcode directory", $"Path: {directory}");
+                    }
+                    catch (Exception dirEx)
+                    {
+                        ErrorLogger.LogError("Failed to create barcode directory", dirEx, $"Path: {directory}");
+                        throw new Exception($"Cannot create directory: {directory}", dirEx);
+                    }
+                }
+
                 BarcodeLib.Barcode b = new BarcodeLib.Barcode();
                 b.BackColor = System.Drawing.Color.White;
                 b.ForeColor = System.Drawing.Color.Black;
@@ -322,11 +338,22 @@ namespace Coupon
                 b.Width = width;
 
                 image = b.Encode(type, code);
-                image.Save(fileSaveUrl, System.Drawing.Imaging.ImageFormat.Jpeg);
+
+                // Save with detailed error logging
+                try
+                {
+                    image.Save(fileSaveUrl, System.Drawing.Imaging.ImageFormat.Jpeg);
+                }
+                catch (Exception saveEx)
+                {
+                    ErrorLogger.LogError("Failed to save barcode image", saveEx,
+                        $"Path: {fileSaveUrl}, Code: {code}, Directory Exists: {System.IO.Directory.Exists(directory)}");
+                    throw;
+                }
             }
             catch (Exception err)
             {
-                err.ToString();
+                ErrorLogger.LogError("Error generating barcode", err, $"Path: {fileSaveUrl}, Code: {code}");
                 image = null;
             }
         }
