@@ -23,21 +23,46 @@ namespace Coupon
         {
             try
             {
+                string ipAddress = Request.UserHostAddress;
+
+                // SECURITY: Check rate limiting before processing
+                var rateLimitConfig = SecureConfig.GetRateLimitConfig();
+                if (!RateLimiter.IsAllowed(ipAddress, rateLimitConfig.MaxAttempts, rateLimitConfig.WindowMinutes))
+                {
+                    ErrorLogger.LogWarning("Rate limit exceeded", $"IP: {ipAddress}, URL: {Request.Url}");
+                    AuditLogger.LogSecurityEvent(
+                        "Rate Limit Exceeded",
+                        ipAddress,
+                        $"URL: {Request.Url}, Max attempts: {rateLimitConfig.MaxAttempts}",
+                        SecuritySeverity.Medium
+                    );
+                    ShowError("คุณมีความเสี่ยงที่จะโจมตีระบบ กรุณาติดต่อผู้ให้บริการ");
+                    return;
+                }
+
                 // SECURITY: Validate and sanitize input before processing
                 string id = InputValidator.GetSafeQueryStringParameter(Request, "id", 20);
 
                 if (string.IsNullOrEmpty(id))
                 {
                     ErrorLogger.LogWarning("Central page accessed without valid coupon ID", $"URL: {Request.Url}");
+                    RateLimiter.RecordAttempt(ipAddress); // Record failed attempt
                     ShowError("รหัสคูปองไม่ถูกต้อง");
                     return;
                 }
 
                 // SECURITY: Validate coupon ID format to prevent injection attacks
-                int expectedLength = Convert.ToInt32(ConfigurationManager.AppSettings["NumberofCode"] ?? "4");
+                int expectedLength = SecureConfig.GetCouponIdLength();
                 if (!InputValidator.IsValidCouponId(id, expectedLength))
                 {
-                    ErrorLogger.LogWarning("Invalid coupon ID format", $"ID: {id}, IP: {Request.UserHostAddress}");
+                    ErrorLogger.LogWarning("Invalid coupon ID format", $"ID: {id}, IP: {ipAddress}");
+                    RateLimiter.RecordAttempt(ipAddress); // Record failed attempt
+                    AuditLogger.LogSecurityEvent(
+                        "Invalid Coupon ID Format",
+                        ipAddress,
+                        $"Attempted ID: {id}",
+                        SecuritySeverity.Low
+                    );
                     ShowError("รหัสคูปองไม่ถูกต้อง");
                     return;
                 }
@@ -68,9 +93,13 @@ namespace Coupon
 
                         _dbHelper.ExecuteNonQuery(updateQuery, updateParams);
 
+                        // SECURITY: Log coupon redemption to audit log
+                        string couponValue = dtCode.Rows[0]["Value"]?.ToString() ?? "Unknown";
+                        AuditLogger.LogCouponRedemption(id, "Central", int.TryParse(couponValue, out int val) ? val : 0, ipAddress);
+
                         // Generate barcode
                         System.Drawing.Image img;
-                        string basePath = ConfigurationManager.AppSettings["Path"];
+                        string basePath = SecureConfig.GetBarcodePath();
 
                         // SECURITY: Validate path to prevent directory traversal
                         if (!InputValidator.IsSafeFilePath(id))
@@ -87,119 +116,102 @@ namespace Coupon
                         Panel1.Visible = false;
                         Panel2.Visible = true;
 
-                        ErrorLogger.LogInfo("Coupon redeemed successfully", $"ID: {id}, IP: {Request.UserHostAddress}");
+                        ErrorLogger.LogInfo("Coupon redeemed successfully", $"ID: {id}, IP: {ipAddress}");
                     }
                     catch (Exception ex)
                     {
                         ErrorLogger.LogError("Error during coupon redemption", ex, $"Coupon ID: {id}");
+                        AuditLogger.LogSecurityEvent(
+                            "Coupon Redemption Failed",
+                            ipAddress,
+                            $"Coupon ID: {id}, Error: {ex.Message}",
+                            SecuritySeverity.Low
+                        );
                         ShowError("เกิดข้อผิดพลาดในการใช้คูปอง กรุณาลองใหม่อีกครั้ง");
                     }
                 }
 
-                // SECURITY: Rate limiting - check failed access attempts from this IP
-                string logsQuery = $"SELECT distinct {_dbHelper.GetColumnName("Access_URL")}, {_dbHelper.GetColumnName("IP_Address")} FROM {_dbHelper.GetTableName("Logs")} " +
-                                 $"WHERE {_dbHelper.GetColumnName("Created_DateTime")} > @checkTime " +
-                                 $"AND {_dbHelper.GetColumnName("Found_Coupon")} = @foundCoupon " +
-                                 $"AND {_dbHelper.GetColumnName("IP_Address")} = @ipAddress " +
-                                 $"GROUP BY {_dbHelper.GetColumnName("IP_Address")}, {_dbHelper.GetColumnName("Access_URL")}";
-
-                var logParams = new[]
+                // Process valid coupon
+                if (dtCode.Rows.Count > 0)
                 {
-                    _dbHelper.CreateParameter("@checkTime", DateTime.Now.AddHours(-1).ToString("yyyy-MM-dd HH:mm:ss")),
-                    _dbHelper.CreateParameter("@foundCoupon", _dbHelper.GetBooleanValue(false)),
-                    _dbHelper.CreateParameter("@ipAddress", Request.UserHostAddress)
-                };
-
-                DataTable dtLogs = _dbHelper.ExecuteQuery(logsQuery, logParams);
-
-                    if (dtLogs.Rows.Count <= 10)
-                {
-                    // Process valid coupon
-                    if (dtCode.Rows.Count > 0)
-                    {
-                        try
-                        {
-                            string couponValue = dtCode.Rows[0]["Value"].ToString();
-                            if (couponValue == "200")
-                            {
-                                Image3.ImageUrl = "./Images/Central/200.png";
-                                Image3.DataBind();
-                                Image2.ImageUrl = "./Images/Central/200.png";
-                                Image2.DataBind();
-                            }
-                            else if (couponValue == "300")
-                            {
-                                Image3.ImageUrl = "./Images/Central/300.png";
-                                Image3.DataBind();
-                                Image2.ImageUrl = "./Images/Central/300.png";
-                                Image2.DataBind();
-                            }
-
-                            Label3.Text = couponValue;
-                        }
-                        catch (Exception ex)
-                        {
-                            ErrorLogger.LogError("Error loading coupon image", ex, $"Coupon ID: {id}");
-                        }
-                    }
-                    // Check expiration date
-                    DateTime expireDate = DateTime.Now;
                     try
                     {
-                        if (dtCode.Rows.Count > 0 && dtCode.Rows[0]["Expire_DateTime"] != DBNull.Value)
+                        string couponValue = dtCode.Rows[0]["Value"].ToString();
+                        if (couponValue == "200")
                         {
-                            expireDate = Convert.ToDateTime(dtCode.Rows[0]["Expire_DateTime"].ToString());
+                            Image3.ImageUrl = "./Images/Central/200.png";
+                            Image3.DataBind();
+                            Image2.ImageUrl = "./Images/Central/200.png";
+                            Image2.DataBind();
                         }
+                        else if (couponValue == "300")
+                        {
+                            Image3.ImageUrl = "./Images/Central/300.png";
+                            Image3.DataBind();
+                            Image2.ImageUrl = "./Images/Central/300.png";
+                            Image2.DataBind();
+                        }
+
+                        Label3.Text = couponValue;
                     }
                     catch (Exception ex)
                     {
-                        ErrorLogger.LogError("Error parsing expiration date", ex, $"Coupon ID: {id}");
+                        ErrorLogger.LogError("Error loading coupon image", ex, $"Coupon ID: {id}");
                     }
+                }
 
-                    // Validate coupon status
-                    if (DateTime.Now > expireDate)
+                // Check expiration date
+                DateTime expireDate = DateTime.Now;
+                try
+                {
+                    if (dtCode.Rows.Count > 0 && dtCode.Rows[0]["Expire_DateTime"] != DBNull.Value)
+                    {
+                        expireDate = Convert.ToDateTime(dtCode.Rows[0]["Expire_DateTime"].ToString());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ErrorLogger.LogError("Error parsing expiration date", ex, $"Coupon ID: {id}");
+                }
+
+                // Validate coupon status
+                if (DateTime.Now > expireDate)
+                {
+                    Button1.Enabled = false;
+                    Button1.Text = "คูปองหมดอายุ";
+                }
+                else if (dtCode.Rows.Count > 0 && DateTime.Now <= expireDate)
+                {
+                    // Coupon is valid - date display logic (currently commented out in original)
+                    string Month = expireDate.Month.ToString().PadLeft(2, '0');
+                    Month = GetThaiMonth(Month);
+                    string year = (expireDate.Year + 543).ToString();
+                    // Label1.Text = expireDate.Day + " " + Month + " " + year;
+                    // Label2.Text = expireDate.Day + " " + Month + " " + year;
+                }
+
+                if (dtCode.Rows.Count > 0)
+                {
+                    string usedStatus = dtCode.Rows[0]["Used_Status"].ToString().ToLower();
+                    bool isUsed = usedStatus == "1" || usedStatus == "true";
+
+                    if (!isUsed && DateTime.Now > expireDate)
                     {
                         Button1.Enabled = false;
-                        Button1.Text = "คูปองหมดอายุ";
+                        ClientScript.RegisterStartupScript(this.GetType(), "myalert", "alert('คูปองหมดอายุแล้ว');", true);
                     }
-                    else if (dtCode.Rows.Count > 0 && DateTime.Now <= expireDate)
+                    else if (isUsed)
                     {
-                        // Coupon is valid - date display logic (currently commented out in original)
-                        string Month = expireDate.Month.ToString().PadLeft(2, '0');
-                        Month = GetThaiMonth(Month);
-                        string year = (expireDate.Year + 543).ToString();
-                        // Label1.Text = expireDate.Day + " " + Month + " " + year;
-                        // Label2.Text = expireDate.Day + " " + Month + " " + year;
-                    }
-
-                    if (dtCode.Rows.Count > 0)
-                    {
-                        string usedStatus = dtCode.Rows[0]["Used_Status"].ToString().ToLower();
-                        bool isUsed = usedStatus == "1" || usedStatus == "true";
-
-                        if (!isUsed && DateTime.Now > expireDate)
-                        {
-                            Button1.Enabled = false;
-                            ClientScript.RegisterStartupScript(this.GetType(), "myalert", "alert('คูปองหมดอายุแล้ว');", true);
-                        }
-                        else if (isUsed)
-                        {
-                            // Coupon already used - optionally disable button
-                            // Button1.Enabled = false;
-                            // Button1.Text = "คูปองถูกใช้ไปแล้ว";
-                        }
-                    }
-                    else
-                    {
-                        Button1.Enabled = false;
-                        ShowError("รหัสคูปองไม่ถูกต้อง");
+                        // Coupon already used - optionally disable button
+                        // Button1.Enabled = false;
+                        // Button1.Text = "คูปองถูกใช้ไปแล้ว";
                     }
                 }
                 else
                 {
-                    // Rate limit exceeded
-                    ErrorLogger.LogWarning("Rate limit exceeded", $"IP: {Request.UserHostAddress}, Failed attempts: {dtLogs.Rows.Count}");
-                    ShowError("คุณมีความเสี่ยงที่จะโจมตีระบบ กรุณาติดต่อผู้ให้บริการ");
+                    Button1.Enabled = false;
+                    RateLimiter.RecordAttempt(ipAddress); // Record failed attempt for invalid coupon
+                    ShowError("รหัสคูปองไม่ถูกต้อง");
                 }
             }
             catch (Exception ex)

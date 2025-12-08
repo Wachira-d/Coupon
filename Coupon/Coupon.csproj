@@ -275,6 +275,18 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
+    <Compile Include="Helpers\DatabaseHelper.cs" />
+    <Compile Include="Helpers\ErrorLogger.cs" />
+    <Compile Include="Helpers\InputValidator.cs" />
+    <Compile Include="Helpers\CouponPageBase.cs">
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="Helpers\SecurityHeaders.cs" />
+    <Compile Include="Helpers\CsrfProtection.cs" />
+    <Compile Include="Helpers\RateLimiter.cs" />
+    <Compile Include="Helpers\SessionManager.cs" />
+    <Compile Include="Helpers\AuditLogger.cs" />
+    <Compile Include="Helpers\SecureConfig.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Site.Master.cs">
       <DependentUpon>Site.Master</DependentUpon>
@@ -293,8 +305,10 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="App_Data\" />
+    <Folder Include="AuditLogs\" />
     <Folder Include="Barcode\" />
     <Folder Include="Images\" />
+    <Folder Include="Logs\" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -95,6 +95,12 @@ namespace Coupon.Admin
             if (!isAuthorized)
             {
                 ErrorLogger.LogWarning("Admin login attempt with unauthorized email", $"Email: {email}, IP: {Request.UserHostAddress}");
+                AuditLogger.LogSecurityEvent(
+                    "Unauthorized Admin Access Attempt",
+                    Request.UserHostAddress,
+                    $"Email: {email} attempted to access admin panel",
+                    SecuritySeverity.High
+                );
                 TextBox13.Text = "Unauthorized email";
                 LogAdminAccess(email, false);
                 return;
@@ -136,12 +142,21 @@ namespace Coupon.Admin
 
                 LogAdminAccess(email, true);
                 ErrorLogger.LogInfo("Admin login successful", $"Email: {email}, IP: {Request.UserHostAddress}");
+
+                // SECURITY: Log successful authentication to audit log
+                AuditLogger.LogAuthentication(email, true, Request.UserHostAddress, "Admin panel access");
+
+                // SECURITY: Regenerate session ID to prevent session fixation
+                SessionManager.RegenerateSessionId(Context);
             }
             else
             {
                 TextBox13.Text = "Password incorrect";
                 LogAdminAccess(email, false);
                 ErrorLogger.LogWarning("Admin login failed - invalid password", $"Email: {email}, IP: {Request.UserHostAddress}");
+
+                // SECURITY: Log failed authentication to audit log
+                AuditLogger.LogAuthentication(email, false, Request.UserHostAddress, "Invalid password");
             }
         }
 
@@ -284,6 +299,14 @@ namespace Coupon.Admin
                 Label2.Text = dtResult.Rows.Count + " rows";
 
                 ErrorLogger.LogInfo("Coupon search executed", $"Results: {dtResult.Rows.Count}, IP: {Request.UserHostAddress}");
+
+                // SECURITY: Log admin search activity
+                AuditLogger.LogAdminAction(
+                    "admin",
+                    "Coupon Search",
+                    Request.UserHostAddress,
+                    $"Results: {dtResult.Rows.Count} records"
+                );
             }
             catch (Exception ex)
             {
@@ -354,6 +377,14 @@ namespace Coupon.Admin
                 Label2.Text = dtResult.Rows.Count + " rows";
 
                 ErrorLogger.LogInfo("Logs search executed", $"Results: {dtResult.Rows.Count}, IP: {Request.UserHostAddress}");
+
+                // SECURITY: Log admin search activity
+                AuditLogger.LogAdminAction(
+                    "admin",
+                    "Logs Search",
+                    Request.UserHostAddress,
+                    $"Results: {dtResult.Rows.Count} records"
+                );
             }
             catch (Exception ex)
             {
