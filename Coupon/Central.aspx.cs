@@ -101,6 +101,14 @@ namespace Coupon
                         System.Drawing.Image img;
                         string basePath = SecureConfig.GetBarcodePath();
 
+                        // IMPORTANT: If basePath doesn't already end with "Barcode", add it
+                        // because Image URL uses "./Barcode/" prefix
+                        string barcodePath = basePath;
+                        if (!basePath.EndsWith("Barcode", StringComparison.OrdinalIgnoreCase))
+                        {
+                            barcodePath = System.IO.Path.Combine(basePath, "Barcode");
+                        }
+
                         // SECURITY: Validate path to prevent directory traversal
                         if (!InputValidator.IsSafeFilePath(id))
                         {
@@ -108,7 +116,7 @@ namespace Coupon
                             throw new Exception("Invalid coupon ID for file generation");
                         }
 
-                        string path = System.IO.Path.Combine(basePath, id + ".jpg");
+                        string path = System.IO.Path.Combine(barcodePath, id + ".jpg");
 
                         // Get barcode value - try different column names (case-insensitive)
                         string barcodeValue = GetColumnValue(dtCode.Rows[0], "code", "Code", "Barcode", "CouponCode");

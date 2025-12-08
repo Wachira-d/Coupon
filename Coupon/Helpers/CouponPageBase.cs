@@ -122,6 +122,10 @@ namespace Coupon.Helpers
                 System.Drawing.Image img;
                 string basePath = ConfigurationManager.AppSettings["Path"];
 
+                // IMPORTANT: Barcode images must be saved in Barcode subfolder
+                // because Image URL uses "./Barcode/" prefix
+                string barcodePath = System.IO.Path.Combine(basePath, "Barcode");
+
                 // SECURITY: Validate path
                 if (!InputValidator.IsSafeFilePath(id))
                 {
@@ -129,7 +133,7 @@ namespace Coupon.Helpers
                     throw new Exception("Invalid coupon ID for file generation");
                 }
 
-                string path = System.IO.Path.Combine(basePath, id + ".jpg");
+                string path = System.IO.Path.Combine(barcodePath, id + ".jpg");
 
                 // Get barcode value - try different column names (case-insensitive)
                 string barcodeValue = GetColumnValue(dtCode.Rows[0], "code", "Code", "Barcode", "CouponCode");
