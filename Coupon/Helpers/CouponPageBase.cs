@@ -1,0 +1,369 @@
+using System;
+using System.Configuration;
+using System.Data;
+using System.Drawing;
+using System.Web;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using BarcodeLib;
+
+namespace Coupon.Helpers
+{
+    /// <summary>
+    /// Base class for coupon redemption pages (Central, Lotus, Starbucks)
+    /// Provides common functionality and reduces code duplication
+    /// </summary>
+    public abstract class CouponPageBase : Page
+    {
+        protected DatabaseHelper _dbHelper;
+        protected string BrandName { get; set; }
+        protected string ImagePath { get; set; }
+
+        protected CouponPageBase()
+        {
+            _dbHelper = new DatabaseHelper();
+        }
+
+        /// <summary>
+        /// Override in derived classes to set brand-specific properties
+        /// </summary>
+        protected abstract void InitializeBrandSettings();
+
+        /// <summary>
+        /// Common Page_Load logic for all coupon pages
+        /// </summary>
+        protected void ProcessCouponPage(Image image1, Image image2, Image image3, Label label3, Button button1, Panel panel1, Panel panel2)
+        {
+            try
+            {
+                // Initialize brand-specific settings
+                InitializeBrandSettings();
+
+                // SECURITY: Validate and sanitize input
+                string id = InputValidator.GetSafeQueryStringParameter(Request, "id", 20);
+
+                if (string.IsNullOrEmpty(id))
+                {
+                    ErrorLogger.LogWarning($"{BrandName} page accessed without valid coupon ID", $"URL: {Request.Url}");
+                    ShowError("รหัสคูปองไม่ถูกต้อง");
+                    return;
+                }
+
+                // SECURITY: Validate coupon ID format
+                int expectedLength = Convert.ToInt32(ConfigurationManager.AppSettings["NumberofCode"] ?? "4");
+                if (!InputValidator.IsValidCouponId(id, expectedLength))
+                {
+                    ErrorLogger.LogWarning($"Invalid coupon ID format on {BrandName}", $"ID: {id}, IP: {Request.UserHostAddress}");
+                    ShowError("รหัสคูปองไม่ถูกต้อง");
+                    return;
+                }
+
+                // SECURITY: Use parameterized query
+                string query = $"SELECT * FROM {_dbHelper.GetTableName("coupon")} WHERE {_dbHelper.GetColumnName("ID")} = @id";
+                var parameter = _dbHelper.CreateParameter("@id", id);
+                DataTable dtCode = _dbHelper.ExecuteQuery(query, parameter);
+
+                // Log access attempt
+                LogAccess(id, dtCode.Rows.Count);
+
+                // Process redemption if requested
+                string action = InputValidator.GetSafeQueryStringParameter(Request, "action", 20);
+                if (action == "Redeem" && dtCode.Rows.Count > 0)
+                {
+                    ProcessRedemption(id, dtCode, image1, panel1, panel2);
+                }
+
+                // Rate limiting check
+                if (!CheckRateLimits())
+                {
+                    ErrorLogger.LogWarning($"Rate limit exceeded on {BrandName}", $"IP: {Request.UserHostAddress}");
+                    ShowError("คุณมีความเสี่ยงที่จะโจมตีระบบ กรุณาติดต่อผู้ให้บริการ");
+                    return;
+                }
+
+                // Process coupon display
+                if (dtCode.Rows.Count > 0)
+                {
+                    DisplayCoupon(dtCode, image2, image3, label3, button1);
+                }
+                else
+                {
+                    button1.Enabled = false;
+                    ShowError("รหัสคูปองไม่ถูกต้อง");
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError($"Error in {BrandName} Page_Load", ex);
+                ShowError("เกิดข้อผิดพลาดในการโหลดหน้า กรุณาลองใหม่อีกครั้ง");
+            }
+        }
+
+        /// <summary>
+        /// Process coupon redemption
+        /// </summary>
+        private void ProcessRedemption(string id, DataTable dtCode, Image image1, Panel panel1, Panel panel2)
+        {
+            try
+            {
+                // SECURITY: Use parameterized query for UPDATE
+                string updateQuery = $"UPDATE {_dbHelper.GetTableName("Coupon")} SET {_dbHelper.GetColumnName("Date_Use")} = @dateUse, {_dbHelper.GetColumnName("Used_Status")} = @usedStatus WHERE {_dbHelper.GetColumnName("ID")} = @id";
+
+                var updateParams = new[]
+                {
+                    _dbHelper.CreateParameter("@dateUse", DateTime.Now.ToString("yyyy-MM-dd HH:mm")),
+                    _dbHelper.CreateParameter("@usedStatus", _dbHelper.GetBooleanValue(true)),
+                    _dbHelper.CreateParameter("@id", id)
+                };
+
+                _dbHelper.ExecuteNonQuery(updateQuery, updateParams);
+
+                // Generate barcode
+                System.Drawing.Image img;
+                string basePath = ConfigurationManager.AppSettings["Path"];
+
+                // SECURITY: Validate path
+                if (!InputValidator.IsSafeFilePath(id))
+                {
+                    ErrorLogger.LogWarning($"Unsafe file path detected on {BrandName}", $"ID: {id}");
+                    throw new Exception("Invalid coupon ID for file generation");
+                }
+
+                string path = System.IO.Path.Combine(basePath, id + ".jpg");
+                GetBarcode(140, 450, BarcodeLib.TYPE.CODE128, dtCode.Rows[0][_dbHelper.GetColumnName("code")].ToString(), out img, path);
+                image1.ImageUrl = "./Barcode/" + id + ".jpg";
+                image1.DataBind();
+
+                panel1.Visible = false;
+                panel2.Visible = true;
+
+                ErrorLogger.LogInfo($"Coupon redeemed successfully on {BrandName}", $"ID: {id}, IP: {Request.UserHostAddress}");
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError($"Error during coupon redemption on {BrandName}", ex, $"Coupon ID: {id}");
+                ShowError("เกิดข้อผิดพลาดในการใช้คูปอง กรุณาลองใหม่อีกครั้ง");
+            }
+        }
+
+        /// <summary>
+        /// Display coupon information
+        /// </summary>
+        private void DisplayCoupon(DataTable dtCode, Image image2, Image image3, Label label3, Button button1)
+        {
+            try
+            {
+                string couponValue = dtCode.Rows[0]["Value"].ToString();
+                string imagePath200 = $"./Images/{ImagePath}/200.png";
+                string imagePath300 = $"./Images/{ImagePath}/300.png";
+
+                if (couponValue == "200")
+                {
+                    image3.ImageUrl = imagePath200;
+                    image3.DataBind();
+                    image2.ImageUrl = imagePath200;
+                    image2.DataBind();
+                }
+                else if (couponValue == "300")
+                {
+                    image3.ImageUrl = imagePath300;
+                    image3.DataBind();
+                    image2.ImageUrl = imagePath300;
+                    image2.DataBind();
+                }
+
+                label3.Text = couponValue;
+
+                // Check expiration date
+                DateTime expireDate = DateTime.Now;
+                try
+                {
+                    if (dtCode.Rows[0]["Expire_DateTime"] != DBNull.Value)
+                    {
+                        expireDate = Convert.ToDateTime(dtCode.Rows[0]["Expire_DateTime"].ToString());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ErrorLogger.LogError($"Error parsing expiration date on {BrandName}", ex);
+                }
+
+                // Validate coupon status
+                if (DateTime.Now > expireDate)
+                {
+                    button1.Enabled = false;
+                    button1.Text = "คูปองหมดอายุ";
+                }
+                else if (DateTime.Now <= expireDate)
+                {
+                    // Coupon is valid
+                    string Month = expireDate.Month.ToString().PadLeft(2, '0');
+                    Month = GetThaiMonth(Month);
+                    string year = (expireDate.Year + 543).ToString();
+                    // Date display can be enabled if needed in derived classes
+                }
+
+                // Check used status
+                string usedStatus = dtCode.Rows[0]["Used_Status"].ToString().ToLower();
+                bool isUsed = usedStatus == "1" || usedStatus == "true";
+
+                if (!isUsed && DateTime.Now > expireDate)
+                {
+                    button1.Enabled = false;
+                    ShowError("คูปองหมดอายุแล้ว");
+                }
+                else if (isUsed)
+                {
+                    // Coupon already used - optionally disable button
+                    // button1.Enabled = false;
+                    // button1.Text = "คูปองถูกใช้ไปแล้ว";
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError($"Error loading coupon image on {BrandName}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Check rate limits for failed access attempts
+        /// </summary>
+        private bool CheckRateLimits()
+        {
+            try
+            {
+                string logsQuery = $"SELECT distinct {_dbHelper.GetColumnName("Access_URL")}, {_dbHelper.GetColumnName("IP_Address")} FROM {_dbHelper.GetTableName("Logs")} " +
+                                 $"WHERE {_dbHelper.GetColumnName("Created_DateTime")} > @checkTime " +
+                                 $"AND {_dbHelper.GetColumnName("Found_Coupon")} = @foundCoupon " +
+                                 $"AND {_dbHelper.GetColumnName("IP_Address")} = @ipAddress " +
+                                 $"GROUP BY {_dbHelper.GetColumnName("IP_Address")}, {_dbHelper.GetColumnName("Access_URL")}";
+
+                var logParams = new[]
+                {
+                    _dbHelper.CreateParameter("@checkTime", DateTime.Now.AddHours(-1).ToString("yyyy-MM-dd HH:mm:ss")),
+                    _dbHelper.CreateParameter("@foundCoupon", _dbHelper.GetBooleanValue(false)),
+                    _dbHelper.CreateParameter("@ipAddress", Request.UserHostAddress)
+                };
+
+                DataTable dtLogs = _dbHelper.ExecuteQuery(logsQuery, logParams);
+                return dtLogs.Rows.Count <= 10;
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError($"Error checking rate limits on {BrandName}", ex);
+                return true; // Allow access if rate limit check fails
+            }
+        }
+
+        /// <summary>
+        /// Log access attempt to database
+        /// </summary>
+        protected void LogAccess(string couponId, int foundCouponCount)
+        {
+            try
+            {
+                string machineName = Request.UserHostAddress;
+                try
+                {
+                    machineName = System.Net.Dns.GetHostEntry(Request.UserHostAddress).HostName;
+                }
+                catch
+                {
+                    // If DNS lookup fails, use IP address
+                }
+
+                string logQuery = $"INSERT INTO {_dbHelper.GetTableName("Logs")} " +
+                                $"({_dbHelper.GetColumnName("Created_DateTime")}, {_dbHelper.GetColumnName("Machine_Name")}, " +
+                                $"{_dbHelper.GetColumnName("IP_Address")}, {_dbHelper.GetColumnName("Browser")}, " +
+                                $"{_dbHelper.GetColumnName("Access_URL")}, {_dbHelper.GetColumnName("Found_Coupon")}) " +
+                                $"VALUES(@createdDateTime, @machineName, @ipAddress, @browser, @accessUrl, @foundCoupon)";
+
+                var logParams = new[]
+                {
+                    _dbHelper.CreateParameter("@createdDateTime", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                    _dbHelper.CreateParameter("@machineName", machineName),
+                    _dbHelper.CreateParameter("@ipAddress", Request.UserHostAddress),
+                    _dbHelper.CreateParameter("@browser", Request.Browser.Browser),
+                    _dbHelper.CreateParameter("@accessUrl", Request.Url.AbsoluteUri),
+                    _dbHelper.CreateParameter("@foundCoupon", foundCouponCount)
+                };
+
+                _dbHelper.ExecuteNonQuery(logQuery, logParams);
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError($"Error logging access on {BrandName}", ex, $"Coupon ID: {couponId}");
+            }
+        }
+
+        /// <summary>
+        /// Show error message to user
+        /// </summary>
+        protected void ShowError(string message)
+        {
+            ClientScript.RegisterStartupScript(this.GetType(), "myalert", $"alert('{message}');", true);
+        }
+
+        /// <summary>
+        /// Convert month number to Thai month name
+        /// </summary>
+        protected string GetThaiMonth(string month)
+        {
+            switch (month)
+            {
+                case "01": return "มกราคม";
+                case "02": return "กุมภาพันธ์";
+                case "03": return "มีนาคม";
+                case "04": return "เมษายน";
+                case "05": return "พฤษภาคม";
+                case "06": return "มิถุนายน";
+                case "07": return "กรกฎาคม";
+                case "08": return "สิงหาคม";
+                case "09": return "กันยายน";
+                case "10": return "ตุลาคม";
+                case "11": return "พฤศจิกายน";
+                case "12": return "ธันวาคม";
+                default: return month;
+            }
+        }
+
+        /// <summary>
+        /// Generate barcode image
+        /// </summary>
+        protected static void GetBarcode(int height, int width, BarcodeLib.TYPE type, string code, out System.Drawing.Image image, string fileSaveUrl)
+        {
+            try
+            {
+                image = null;
+
+                BarcodeLib.Barcode b = new BarcodeLib.Barcode();
+                b.BackColor = System.Drawing.Color.White;
+                b.ForeColor = System.Drawing.Color.Black;
+                b.IncludeLabel = true;
+                b.Alignment = BarcodeLib.AlignmentPositions.CENTER;
+                b.LabelPosition = BarcodeLib.LabelPositions.BOTTOMCENTER;
+                b.ImageFormat = System.Drawing.Imaging.ImageFormat.Jpeg;
+                System.Drawing.Font font = new System.Drawing.Font("verdana", 10f);
+                b.LabelFont = font;
+                b.Height = height;
+                b.Width = width;
+
+                image = b.Encode(type, code);
+                image.Save(fileSaveUrl, System.Drawing.Imaging.ImageFormat.Jpeg);
+            }
+            catch (Exception err)
+            {
+                ErrorLogger.LogError("Error generating barcode", new Exception(err.ToString()));
+                image = null;
+            }
+        }
+
+        /// <summary>
+        /// Handle redirect with redemption action
+        /// </summary>
+        protected void RedirectToRedemption()
+        {
+            Response.Redirect(HttpContext.Current.Request.Url.AbsoluteUri + "&action=Redeem");
+        }
+    }
+}
