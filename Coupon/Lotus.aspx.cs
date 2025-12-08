@@ -18,7 +18,7 @@ namespace Coupon
 
         protected void Page_Load(object sender, EventArgs e)
         {
-            ProcessCouponPage(Image1, Image2, Image3, Label3, Button1, Panel1, Panel2);
+            ProcessCouponPage(Image1, Image2, Image3, Label3, Button1, Panel1, Panel2, Label1, Label2);
         }
 
         protected void Button1_Click(object sender, EventArgs e)

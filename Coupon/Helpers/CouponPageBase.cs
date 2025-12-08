@@ -32,7 +32,7 @@ namespace Coupon.Helpers
         /// <summary>
         /// Common Page_Load logic for all coupon pages
         /// </summary>
-        protected void ProcessCouponPage(System.Web.UI.WebControls.Image image1, System.Web.UI.WebControls.Image image2, System.Web.UI.WebControls.Image image3, Label label3, Button button1, Panel panel1, Panel panel2)
+        protected void ProcessCouponPage(System.Web.UI.WebControls.Image image1, System.Web.UI.WebControls.Image image2, System.Web.UI.WebControls.Image image3, Label label3, Button button1, Panel panel1, Panel panel2, Label label1 = null, Label label2 = null)
         {
             try
             {
@@ -84,7 +84,7 @@ namespace Coupon.Helpers
                 // Process coupon display
                 if (dtCode.Rows.Count > 0)
                 {
-                    DisplayCoupon(dtCode, image2, image3, label3, button1);
+                    DisplayCoupon(dtCode, image2, image3, label3, button1, label1, label2);
                 }
                 else
                 {
@@ -159,7 +159,7 @@ namespace Coupon.Helpers
         /// <summary>
         /// Display coupon information
         /// </summary>
-        private void DisplayCoupon(DataTable dtCode, System.Web.UI.WebControls.Image image2, System.Web.UI.WebControls.Image image3, Label label3, Button button1)
+        private void DisplayCoupon(DataTable dtCode, System.Web.UI.WebControls.Image image2, System.Web.UI.WebControls.Image image3, Label label3, Button button1, Label label1 = null, Label label2 = null)
         {
             try
             {
@@ -206,11 +206,21 @@ namespace Coupon.Helpers
                 }
                 else if (DateTime.Now <= expireDate)
                 {
-                    // Coupon is valid
+                    // Coupon is valid - display expiration date
                     string Month = expireDate.Month.ToString().PadLeft(2, '0');
                     Month = GetThaiMonth(Month);
                     string year = (expireDate.Year + 543).ToString();
-                    // Date display can be enabled if needed in derived classes
+                    string displayDate = $"{expireDate.Day} {Month} {year}";
+
+                    // Set date labels if provided
+                    if (label1 != null)
+                    {
+                        label1.Text = displayDate;
+                    }
+                    if (label2 != null)
+                    {
+                        label2.Text = displayDate;
+                    }
                 }
 
                 // Check used status
