@@ -12,186 +12,273 @@ using System.Drawing.Imaging;
 using System.Data.SqlClient;
 using Npgsql;
 using System.Configuration;
+using Coupon.Helpers;
 
 namespace Coupon
 {
     public partial class Central : Page
     {
-        private string databaseType = ConfigurationSettings.AppSettings["DatabaseType"].ToString().ToLower();
-        private string connectionString = "";
+        private DatabaseHelper _dbHelper = new DatabaseHelper();
         protected void Page_Load(object sender, EventArgs e)
         {
-            // Get appropriate connection string based on database type
-            if (databaseType == "postgresql")
-            {
-                connectionString = ConfigurationSettings.AppSettings["PostgreSQLConnectionString"].ToString();
-            }
-            else
-            {
-                connectionString = ConfigurationSettings.AppSettings["MSSQLConnectionString"].ToString();
-            }
-
-            if (ConfigurationSettings.AppSettings["CutSlashfromRedirect"].ToString().ToLower() == "yes")
-            {
-                string url = HttpContext.Current.Request.Url.AbsoluteUri;
-                string[] code = url.Split('/');
-                if (code[code.Length - 1].Length == Convert.ToInt32(ConfigurationSettings.AppSettings["NumberofCode"]))
-                {
-                    Response.Redirect("./?id=" + code[code.Length - 1]);
-                }
-            }
-
-            string id = Request.QueryString["id"];
-            DataTable dtCode = DatabaseQuery(connectionString, "SELECT * FROM " + GetTableName("coupon") + " WHERE " + GetColumnName("ID") + " = '" + id + "'");
-
             try
             {
-                string logQuery = "INSERT INTO " + GetTableName("Logs") + " (" + GetColumnName("Created_DateTime") + ", " + GetColumnName("Machine_Name") + ", " + GetColumnName("IP_Address") + ", " + GetColumnName("Browser") + ", " + GetColumnName("Access_URL") + ", " + GetColumnName("Found_Coupon") + ") " +
-                                 "VALUES('" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',N'" + System.Net.Dns.GetHostEntry(HttpContext.Current.Request.UserHostName.ToString()).HostName + "','" + HttpContext.Current.Request.UserHostName.ToString() + "','" + HttpContext.Current.Request.Browser.Browser + "',N'" + HttpContext.Current.Request.Url.AbsoluteUri + "','" + dtCode.Rows.Count + "')";
-                DatabaseInsert(connectionString, logQuery);
-            }
-            catch
-            {
-                string logQuery = "INSERT INTO " + GetTableName("Logs") + " (" + GetColumnName("Created_DateTime") + ", " + GetColumnName("Machine_Name") + ", " + GetColumnName("IP_Address") + ", " + GetColumnName("Browser") + ", " + GetColumnName("Access_URL") + ", " + GetColumnName("Found_Coupon") + ") " +
-                                 "VALUES('" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "',N'" + HttpContext.Current.Request.UserHostName.ToString() + "','" + HttpContext.Current.Request.UserHostName.ToString() + "','" + HttpContext.Current.Request.Browser.Browser + "',N'" + HttpContext.Current.Request.Url.AbsoluteUri + "','" + dtCode.Rows.Count + "')";
-                DatabaseInsert(connectionString, logQuery);
-            }
+                // SECURITY: Validate and sanitize input before processing
+                string id = InputValidator.GetSafeQueryStringParameter(Request, "id", 20);
 
-            try
-            {
-                string action = Request.QueryString["action"];
-                if (action == "Redeem")
+                if (string.IsNullOrEmpty(id))
                 {
-                    string updateQuery = "UPDATE " + GetTableName("Coupon") + " SET " + GetColumnName("Date_Use") + " = '" + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "' , " + GetColumnName("Used_Status") + " = " + GetBooleanValue(true) + " WHERE " + GetColumnName("ID") + " = '" + id + "'";
-                    DatabaseInsert(connectionString, updateQuery);
-
-                    System.Drawing.Image img;
-                    string path = System.Configuration.ConfigurationSettings.AppSettings["Path"].ToString() + id + ".jpg";
-                    GetBarcode(140, 450, BarcodeLib.TYPE.CODE128, dtCode.Rows[0][GetColumnName("code")].ToString(), out img, path);
-                    Image1.ImageUrl = "./Barcode/" + id + ".jpg";
-                    Image1.DataBind();
-
-                    Panel1.Visible = false;
-                    Panel2.Visible = true;
+                    ErrorLogger.LogWarning("Central page accessed without valid coupon ID", $"URL: {Request.Url}");
+                    ShowError("รหัสคูปองไม่ถูกต้อง");
+                    return;
                 }
-            }
-            catch { }
 
-            string logsQuery = "SELECT distinct " + GetColumnName("Access_URL") + ", " + GetColumnName("IP_Address") + " FROM " + GetTableName("Logs") +
-                             " WHERE " + GetColumnName("Created_DateTime") + " > '" + DateTime.Now.AddHours(-1).ToString("yyyy-MM-dd HH:mm:ss") +
-                             "' AND " + GetColumnName("Found_Coupon") + " = " + GetBooleanValue(false) +
-                             " AND " + GetColumnName("IP_Address") + " = N'" + HttpContext.Current.Request.UserHostName.ToString() +
-                             "' GROUP BY " + GetColumnName("IP_Address") + ", " + GetColumnName("Access_URL");
-
-            DataTable dtLogs = DatabaseQuery(connectionString, logsQuery);
-
-            if (dtLogs.Rows.Count <= 10)
-            {
-                try
+                // SECURITY: Validate coupon ID format to prevent injection attacks
+                int expectedLength = Convert.ToInt32(ConfigurationManager.AppSettings["NumberofCode"] ?? "4");
+                if (!InputValidator.IsValidCouponId(id, expectedLength))
                 {
-                    if (dtCode.Rows[0]["Value"].ToString() == "200")
+                    ErrorLogger.LogWarning("Invalid coupon ID format", $"ID: {id}, IP: {Request.UserHostAddress}");
+                    ShowError("รหัสคูปองไม่ถูกต้อง");
+                    return;
+                }
+
+                // SECURITY: Use parameterized query to prevent SQL injection
+                string query = $"SELECT * FROM {_dbHelper.GetTableName("coupon")} WHERE {_dbHelper.GetColumnName("ID")} = @id";
+                var parameter = _dbHelper.CreateParameter("@id", id);
+                DataTable dtCode = _dbHelper.ExecuteQuery(query, parameter);
+
+                // SECURITY: Log access with parameterized query
+                LogAccess(id, dtCode.Rows.Count);
+
+                // Check if redemption action is requested
+                string action = InputValidator.GetSafeQueryStringParameter(Request, "action", 20);
+                if (action == "Redeem" && dtCode.Rows.Count > 0)
+                {
+                    try
                     {
-                        Image3.ImageUrl = "./Images/Central/200.png";
-                        Image3.DataBind();
-                        Image2.ImageUrl = "./Images/Central/200.png";
-                        Image2.DataBind();
+                        // SECURITY: Use parameterized query for UPDATE
+                        string updateQuery = $"UPDATE {_dbHelper.GetTableName("Coupon")} SET {_dbHelper.GetColumnName("Date_Use")} = @dateUse, {_dbHelper.GetColumnName("Used_Status")} = @usedStatus WHERE {_dbHelper.GetColumnName("ID")} = @id";
+
+                        var updateParams = new[]
+                        {
+                            _dbHelper.CreateParameter("@dateUse", DateTime.Now.ToString("yyyy-MM-dd HH:mm")),
+                            _dbHelper.CreateParameter("@usedStatus", _dbHelper.GetBooleanValue(true)),
+                            _dbHelper.CreateParameter("@id", id)
+                        };
+
+                        _dbHelper.ExecuteNonQuery(updateQuery, updateParams);
+
+                        // Generate barcode
+                        System.Drawing.Image img;
+                        string basePath = ConfigurationManager.AppSettings["Path"];
+
+                        // SECURITY: Validate path to prevent directory traversal
+                        if (!InputValidator.IsSafeFilePath(id))
+                        {
+                            ErrorLogger.LogWarning("Unsafe file path detected", $"ID: {id}");
+                            throw new Exception("Invalid coupon ID for file generation");
+                        }
+
+                        string path = System.IO.Path.Combine(basePath, id + ".jpg");
+                        GetBarcode(140, 450, BarcodeLib.TYPE.CODE128, dtCode.Rows[0][_dbHelper.GetColumnName("code")].ToString(), out img, path);
+                        Image1.ImageUrl = "./Barcode/" + id + ".jpg";
+                        Image1.DataBind();
+
+                        Panel1.Visible = false;
+                        Panel2.Visible = true;
+
+                        ErrorLogger.LogInfo("Coupon redeemed successfully", $"ID: {id}, IP: {Request.UserHostAddress}");
                     }
-                    else if (dtCode.Rows[0]["Value"].ToString() == "300")
+                    catch (Exception ex)
                     {
-                        Image3.ImageUrl = "./Images/Central/300.png";
-                        Image3.DataBind();
-                        Image2.ImageUrl = "./Images/Central/300.png";
-                        Image2.DataBind();
+                        ErrorLogger.LogError("Error during coupon redemption", ex, $"Coupon ID: {id}");
+                        ShowError("เกิดข้อผิดพลาดในการใช้คูปอง กรุณาลองใหม่อีกครั้ง");
                     }
-
-                    Label3.Text = dtCode.Rows[0]["Value"].ToString();
                 }
-                catch { }
-                DateTime expireDate = DateTime.Now;
-                try { expireDate = Convert.ToDateTime(dtCode.Rows[0]["Expire_DateTime"].ToString()); }
-                catch { }
 
-                if (DateTime.Now > expireDate)
-                {
-                    Button1.Enabled = false;
-                    Button1.Text = "คูปองหมดอายุ";
-                }
-                if (dtCode.Rows.Count > 0 && DateTime.Now <= expireDate)
-                {
+                // SECURITY: Rate limiting - check failed access attempts from this IP
+                string logsQuery = $"SELECT distinct {_dbHelper.GetColumnName("Access_URL")}, {_dbHelper.GetColumnName("IP_Address")} FROM {_dbHelper.GetTableName("Logs")} " +
+                                 $"WHERE {_dbHelper.GetColumnName("Created_DateTime")} > @checkTime " +
+                                 $"AND {_dbHelper.GetColumnName("Found_Coupon")} = @foundCoupon " +
+                                 $"AND {_dbHelper.GetColumnName("IP_Address")} = @ipAddress " +
+                                 $"GROUP BY {_dbHelper.GetColumnName("IP_Address")}, {_dbHelper.GetColumnName("Access_URL")}";
 
-                    string Month = expireDate.Month.ToString();
-                    if (Month.Length == 1)
+                var logParams = new[]
+                {
+                    _dbHelper.CreateParameter("@checkTime", DateTime.Now.AddHours(-1).ToString("yyyy-MM-dd HH:mm:ss")),
+                    _dbHelper.CreateParameter("@foundCoupon", _dbHelper.GetBooleanValue(false)),
+                    _dbHelper.CreateParameter("@ipAddress", Request.UserHostAddress)
+                };
+
+                DataTable dtLogs = _dbHelper.ExecuteQuery(logsQuery, logParams);
+
+                    if (dtLogs.Rows.Count <= 10)
+                {
+                    // Process valid coupon
+                    if (dtCode.Rows.Count > 0)
                     {
-                        Month = "0" + Month;
+                        try
+                        {
+                            string couponValue = dtCode.Rows[0]["Value"].ToString();
+                            if (couponValue == "200")
+                            {
+                                Image3.ImageUrl = "./Images/Central/200.png";
+                                Image3.DataBind();
+                                Image2.ImageUrl = "./Images/Central/200.png";
+                                Image2.DataBind();
+                            }
+                            else if (couponValue == "300")
+                            {
+                                Image3.ImageUrl = "./Images/Central/300.png";
+                                Image3.DataBind();
+                                Image2.ImageUrl = "./Images/Central/300.png";
+                                Image2.DataBind();
+                            }
+
+                            Label3.Text = couponValue;
+                        }
+                        catch (Exception ex)
+                        {
+                            ErrorLogger.LogError("Error loading coupon image", ex, $"Coupon ID: {id}");
+                        }
+                    }
+                    // Check expiration date
+                    DateTime expireDate = DateTime.Now;
+                    try
+                    {
+                        if (dtCode.Rows.Count > 0 && dtCode.Rows[0]["Expire_DateTime"] != DBNull.Value)
+                        {
+                            expireDate = Convert.ToDateTime(dtCode.Rows[0]["Expire_DateTime"].ToString());
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ErrorLogger.LogError("Error parsing expiration date", ex, $"Coupon ID: {id}");
                     }
 
-                    if (Month == "01") { Month = "มกราคม"; }
-                    else if (Month == "02") { Month = "กุมภาพันธ์"; }
-                    else if (Month == "03") { Month = "มีนาคม"; }
-                    else if (Month == "04") { Month = "เมษายน"; }
-                    else if (Month == "05") { Month = "พฤษภาคม"; }
-                    else if (Month == "06") { Month = "มิถุนายน"; }
-                    else if (Month == "07") { Month = "กรกฎาคม"; }
-                    else if (Month == "08") { Month = "สิงหาคม"; }
-                    else if (Month == "09") { Month = "กันยายน"; }
-                    else if (Month == "10") { Month = "ตุลาคม"; }
-                    else if (Month == "11") { Month = "พฤศจิกายน"; }
-                    else if (Month == "12") { Month = "ธันวาคม"; }
+                    // Validate coupon status
+                    if (DateTime.Now > expireDate)
+                    {
+                        Button1.Enabled = false;
+                        Button1.Text = "คูปองหมดอายุ";
+                    }
+                    else if (dtCode.Rows.Count > 0 && DateTime.Now <= expireDate)
+                    {
+                        // Coupon is valid - date display logic (currently commented out in original)
+                        string Month = expireDate.Month.ToString().PadLeft(2, '0');
+                        Month = GetThaiMonth(Month);
+                        string year = (expireDate.Year + 543).ToString();
+                        // Label1.Text = expireDate.Day + " " + Month + " " + year;
+                        // Label2.Text = expireDate.Day + " " + Month + " " + year;
+                    }
 
-                    string year = (Convert.ToInt32(expireDate.Year.ToString()) + 543).ToString();
+                    if (dtCode.Rows.Count > 0)
+                    {
+                        string usedStatus = dtCode.Rows[0]["Used_Status"].ToString().ToLower();
+                        bool isUsed = usedStatus == "1" || usedStatus == "true";
 
-                    //Label1.Text = expireDate.Day + " " + Month + " " + year;
-                    //Label2.Text = expireDate.Day + " " + Month + " " + year;
-
-                }
-                else if (dtCode.Rows.Count > 0 && (dtCode.Rows[0]["Used_Status"] == "0" || dtCode.Rows[0]["Used_Status"].ToString().ToLower() == "false") && DateTime.Now > expireDate)
-                {
-                    Button1.Enabled = false;
-                    ClientScript.RegisterStartupScript(this.GetType(), "myalert", "alert('คูปองหมดอายุแล้ว');", true);
-                }
-                else if (dtCode.Rows.Count > 0 && (dtCode.Rows[0]["Used_Status"] == "1" || dtCode.Rows[0]["Used_Status"].ToString().ToLower() == "true"))
-                {
-
-                    //Button1.Enabled = false;
-                    //Button1.Text = "คูปองถูกใช้ไปแล้ว";
+                        if (!isUsed && DateTime.Now > expireDate)
+                        {
+                            Button1.Enabled = false;
+                            ClientScript.RegisterStartupScript(this.GetType(), "myalert", "alert('คูปองหมดอายุแล้ว');", true);
+                        }
+                        else if (isUsed)
+                        {
+                            // Coupon already used - optionally disable button
+                            // Button1.Enabled = false;
+                            // Button1.Text = "คูปองถูกใช้ไปแล้ว";
+                        }
+                    }
+                    else
+                    {
+                        Button1.Enabled = false;
+                        ShowError("รหัสคูปองไม่ถูกต้อง");
+                    }
                 }
                 else
                 {
-                    Button1.Enabled = false;
-                    ClientScript.RegisterStartupScript(this.GetType(), "myalert", "alert('รหัสคูปองไม่ถูกต้อง');", true);
+                    // Rate limit exceeded
+                    ErrorLogger.LogWarning("Rate limit exceeded", $"IP: {Request.UserHostAddress}, Failed attempts: {dtLogs.Rows.Count}");
+                    ShowError("คุณมีความเสี่ยงที่จะโจมตีระบบ กรุณาติดต่อผู้ให้บริการ");
                 }
             }
-            else
+            catch (Exception ex)
             {
-                ClientScript.RegisterStartupScript(this.GetType(), "myalert", "alert('คุณมีความเสี่ยงที่จะโจมตีระบบ กรุณาติดต่อผู้ให้บริการ');", true);
+                ErrorLogger.LogError("Error in Central Page_Load", ex);
+                ShowError("เกิดข้อผิดพลาดในการโหลดหน้า กรุณาลองใหม่อีกครั้ง");
             }
         }
         
-        private string GetTableName(string tableName)
+        /// <summary>
+        /// Log access attempt to database
+        /// </summary>
+        private void LogAccess(string couponId, int foundCouponCount)
         {
-            if (databaseType == "postgresql")
+            try
             {
-                return tableName.ToLower();
+                string machineName = Request.UserHostAddress; // Default to IP
+                try
+                {
+                    machineName = System.Net.Dns.GetHostEntry(Request.UserHostAddress).HostName;
+                }
+                catch
+                {
+                    // If DNS lookup fails, use IP address
+                }
+
+                string logQuery = $"INSERT INTO {_dbHelper.GetTableName("Logs")} " +
+                                $"({_dbHelper.GetColumnName("Created_DateTime")}, {_dbHelper.GetColumnName("Machine_Name")}, " +
+                                $"{_dbHelper.GetColumnName("IP_Address")}, {_dbHelper.GetColumnName("Browser")}, " +
+                                $"{_dbHelper.GetColumnName("Access_URL")}, {_dbHelper.GetColumnName("Found_Coupon")}) " +
+                                $"VALUES(@createdDateTime, @machineName, @ipAddress, @browser, @accessUrl, @foundCoupon)";
+
+                var logParams = new[]
+                {
+                    _dbHelper.CreateParameter("@createdDateTime", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                    _dbHelper.CreateParameter("@machineName", machineName),
+                    _dbHelper.CreateParameter("@ipAddress", Request.UserHostAddress),
+                    _dbHelper.CreateParameter("@browser", Request.Browser.Browser),
+                    _dbHelper.CreateParameter("@accessUrl", Request.Url.AbsoluteUri),
+                    _dbHelper.CreateParameter("@foundCoupon", foundCouponCount)
+                };
+
+                _dbHelper.ExecuteNonQuery(logQuery, logParams);
             }
-            return "[" + ConfigurationSettings.AppSettings["Coupon_DatabaseName"].ToString() + "].[dbo].[" + tableName + "]";
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError("Error logging access", ex, $"Coupon ID: {couponId}");
+            }
         }
 
-        private string GetColumnName(string columnName)
+        /// <summary>
+        /// Show error message to user
+        /// </summary>
+        private void ShowError(string message)
         {
-            if (databaseType == "postgresql")
-            {
-                return columnName.ToLower();
-            }
-            return "[" + columnName + "]";
+            ClientScript.RegisterStartupScript(this.GetType(), "myalert", $"alert('{message}');", true);
         }
 
-        private string GetBooleanValue(bool value)
+        /// <summary>
+        /// Convert month number to Thai month name
+        /// </summary>
+        private string GetThaiMonth(string month)
         {
-            if (databaseType == "postgresql")
+            switch (month)
             {
-                return value.ToString().ToLower();
+                case "01": return "มกราคม";
+                case "02": return "กุมภาพันธ์";
+                case "03": return "มีนาคม";
+                case "04": return "เมษายน";
+                case "05": return "พฤษภาคม";
+                case "06": return "มิถุนายน";
+                case "07": return "กรกฎาคม";
+                case "08": return "สิงหาคม";
+                case "09": return "กันยายน";
+                case "10": return "ตุลาคม";
+                case "11": return "พฤศจิกายน";
+                case "12": return "ธันวาคม";
+                default: return month;
             }
-            return value ? "1" : "0";
         }
 
         public static void GetBarcode(int height, int width, BarcodeLib.TYPE type, string code, out System.Drawing.Image image, string fileSaveUrl)
@@ -222,69 +309,6 @@ namespace Coupon
             }
         }
 
-        public DataTable DatabaseQuery(string connStr, string cmd)
-        {
-            DataTable dt = new DataTable();
-
-            try
-            {
-                cmd = cmd.Replace("&amp;", "&");
-                cmd = cmd.Replace("&#39;", "''");
-                cmd = cmd.Replace("&#160;", "");
-
-                if (databaseType == "postgresql")
-                {
-                    using (NpgsqlConnection con = new NpgsqlConnection(connStr))
-                    {
-                        NpgsqlDataAdapter adapter = new NpgsqlDataAdapter(cmd, con);
-                        adapter.Fill(dt);
-                    }
-                }
-                else
-                {
-                    using (SqlConnection con = new SqlConnection(connStr))
-                    {
-                        SqlDataAdapter adapter = new SqlDataAdapter(cmd, con);
-                        adapter.Fill(dt);
-                    }
-                }
-            }
-            catch (Exception ex) { }
-
-            return dt;
-        }
-
-        public void DatabaseInsert(string connStr, string cmd)
-        {
-            try
-            {
-                if (databaseType == "postgresql")
-                {
-                    using (NpgsqlConnection connection = new NpgsqlConnection(connStr))
-                    {
-                        using (NpgsqlCommand command = new NpgsqlCommand(cmd, connection))
-                        {
-                            connection.Open();
-                            command.ExecuteNonQuery();
-                            connection.Close();
-                        }
-                    }
-                }
-                else
-                {
-                    using (SqlConnection connection = new SqlConnection(connStr))
-                    {
-                        using (SqlCommand command = new SqlCommand(cmd, connection))
-                        {
-                            connection.Open();
-                            command.ExecuteNonQuery();
-                            connection.Close();
-                        }
-                    }
-                }
-            }
-            catch (Exception ex) { }
-        }
 
         protected void Button1_Click(object sender, EventArgs e)
         {
