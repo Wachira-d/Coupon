@@ -1,6 +1,7 @@
 using System;
 using System.Configuration;
 using System.Data;
+using System.Data.Common;
 using System.DirectoryServices.AccountManagement;
 using System.Web;
 using System.Web.UI;
@@ -210,7 +211,7 @@ namespace Coupon.Admin
             try
             {
                 string query = $"SELECT * FROM {_dbHelper.GetTableName("Coupon")} WHERE 1=1";
-                var parameters = new System.Collections.Generic.List<Helpers.DbParameter>();
+                var parameters = new System.Collections.Generic.List<DbParameter>();
 
                 // SECURITY: Validate and add parameters for each search field
                 if (!string.IsNullOrWhiteSpace(TextBox2.Text))
@@ -334,7 +335,7 @@ namespace Coupon.Admin
             try
             {
                 string query = $"SELECT * FROM {_dbHelper.GetTableName("Logs")} WHERE 1=1";
-                var parameters = new System.Collections.Generic.List<Helpers.DbParameter>();
+                var parameters = new System.Collections.Generic.List<DbParameter>();
 
                 // SECURITY: Validate and add parameters for each search field
                 if (!string.IsNullOrWhiteSpace(TextBox12.Text))

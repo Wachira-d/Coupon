@@ -90,8 +90,10 @@ namespace Coupon.Helpers
                 string sessionUserAgent = session[USER_AGENT_KEY] as string;
                 if (!string.IsNullOrEmpty(sessionUserAgent) && sessionUserAgent != context.Request.UserAgent)
                 {
+                    string sessionUAPreview = sessionUserAgent?.Substring(0, Math.Min(50, sessionUserAgent.Length));
+                    string requestUAPreview = context.Request.UserAgent?.Substring(0, Math.Min(50, context.Request.UserAgent?.Length ?? 0));
                     ErrorLogger.LogWarning("Session User-Agent mismatch detected",
-                        $"Session UA: {sessionUserAgent?.Substring(0, Math.Min(50, sessionUserAgent.Length ?? 0))}, Request UA: {context.Request.UserAgent?.Substring(0, Math.Min(50, context.Request.UserAgent?.Length ?? 0))}");
+                        $"Session UA: {sessionUAPreview}, Request UA: {requestUAPreview}");
                     // Note: Don't destroy session here as User-Agent can change legitimately
                 }
 
