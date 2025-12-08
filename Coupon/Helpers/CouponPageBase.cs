@@ -130,7 +130,17 @@ namespace Coupon.Helpers
                 }
 
                 string path = System.IO.Path.Combine(basePath, id + ".jpg");
-                GetBarcode(140, 450, BarcodeLib.TYPE.CODE128, dtCode.Rows[0][_dbHelper.GetColumnName("code")].ToString(), out img, path);
+
+                // Get barcode value - try different column names (case-insensitive)
+                string barcodeValue = GetColumnValue(dtCode.Rows[0], "code", "Code", "Barcode", "CouponCode");
+                if (string.IsNullOrEmpty(barcodeValue))
+                {
+                    ErrorLogger.LogError($"Barcode column not found on {BrandName}", null,
+                        $"Available columns: {string.Join(", ", GetColumnNames(dtCode))}, Coupon ID: {id}");
+                    throw new Exception("Cannot find barcode column in database");
+                }
+
+                GetBarcode(140, 450, BarcodeLib.TYPE.CODE128, barcodeValue, out img, path);
                 image1.ImageUrl = "./Barcode/" + id + ".jpg";
                 image1.DataBind();
 
@@ -383,6 +393,53 @@ namespace Coupon.Helpers
             }
 
             Response.Redirect(url + "&action=Redeem");
+        }
+
+        /// <summary>
+        /// Get column value from DataRow, trying multiple column name variations
+        /// </summary>
+        private string GetColumnValue(DataRow row, params string[] possibleColumnNames)
+        {
+            foreach (string columnName in possibleColumnNames)
+            {
+                // Try exact match first
+                if (row.Table.Columns.Contains(columnName))
+                {
+                    object value = row[columnName];
+                    if (value != null && value != DBNull.Value)
+                    {
+                        return value.ToString();
+                    }
+                }
+
+                // Try case-insensitive match
+                foreach (DataColumn column in row.Table.Columns)
+                {
+                    if (column.ColumnName.Equals(columnName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        object value = row[column.ColumnName];
+                        if (value != null && value != DBNull.Value)
+                        {
+                            return value.ToString();
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Get all column names from DataTable for debugging
+        /// </summary>
+        private string[] GetColumnNames(DataTable table)
+        {
+            string[] columnNames = new string[table.Columns.Count];
+            for (int i = 0; i < table.Columns.Count; i++)
+            {
+                columnNames[i] = table.Columns[i].ColumnName;
+            }
+            return columnNames;
         }
     }
 }
