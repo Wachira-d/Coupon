@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Web;
 
 namespace Coupon.Helpers
@@ -27,28 +28,28 @@ namespace Coupon.Helpers
                 // X-Frame-Options: Prevents clickjacking attacks
                 // DENY = Page cannot be displayed in a frame
                 // SAMEORIGIN = Page can only be displayed in a frame on the same origin
-                if (!response.Headers.AllKeys.Contains("X-Frame-Options"))
+                if (!response.Headers.AllKeys.Any(k => k == "X-Frame-Options"))
                 {
                     response.Headers.Add("X-Frame-Options", "SAMEORIGIN");
                 }
 
                 // X-Content-Type-Options: Prevents MIME type sniffing
                 // nosniff = Browser should not try to MIME-sniff the content type
-                if (!response.Headers.AllKeys.Contains("X-Content-Type-Options"))
+                if (!response.Headers.AllKeys.Any(k => k == "X-Content-Type-Options"))
                 {
                     response.Headers.Add("X-Content-Type-Options", "nosniff");
                 }
 
                 // X-XSS-Protection: Legacy XSS protection (mostly replaced by CSP)
                 // 1; mode=block = Enable XSS filter and block page if attack detected
-                if (!response.Headers.AllKeys.Contains("X-XSS-Protection"))
+                if (!response.Headers.AllKeys.Any(k => k == "X-XSS-Protection"))
                 {
                     response.Headers.Add("X-XSS-Protection", "1; mode=block");
                 }
 
                 // Referrer-Policy: Controls how much referrer information is sent
                 // strict-origin-when-cross-origin = Send full URL for same-origin, only origin for cross-origin
-                if (!response.Headers.AllKeys.Contains("Referrer-Policy"))
+                if (!response.Headers.AllKeys.Any(k => k == "Referrer-Policy"))
                 {
                     response.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
                 }
@@ -59,7 +60,7 @@ namespace Coupon.Helpers
                 // script-src 'self' 'unsafe-inline' = Allow scripts from same origin and inline scripts (needed for ASP.NET WebForms)
                 // style-src 'self' 'unsafe-inline' = Allow styles from same origin and inline styles
                 // img-src 'self' data: = Allow images from same origin and data URLs
-                if (!response.Headers.AllKeys.Contains("Content-Security-Policy"))
+                if (!response.Headers.AllKeys.Any(k => k == "Content-Security-Policy"))
                 {
                     response.Headers.Add("Content-Security-Policy",
                         "default-src 'self'; " +
@@ -73,7 +74,7 @@ namespace Coupon.Helpers
 
                 // Permissions-Policy: Controls which browser features can be used
                 // Replaces Feature-Policy header
-                if (!response.Headers.AllKeys.Contains("Permissions-Policy"))
+                if (!response.Headers.AllKeys.Any(k => k == "Permissions-Policy"))
                 {
                     response.Headers.Add("Permissions-Policy",
                         "geolocation=(), " +
@@ -93,7 +94,7 @@ namespace Coupon.Helpers
                 // NOTE: Only add this if you're using HTTPS!
                 if (context.Request.IsSecureConnection)
                 {
-                    if (!response.Headers.AllKeys.Contains("Strict-Transport-Security"))
+                    if (!response.Headers.AllKeys.Any(k => k == "Strict-Transport-Security"))
                     {
                         response.Headers.Add("Strict-Transport-Security",
                             "max-age=31536000; includeSubDomains; preload");
@@ -117,19 +118,19 @@ namespace Coupon.Helpers
             try
             {
                 // Remove X-Powered-By header (reveals ASP.NET)
-                if (response.Headers.AllKeys.Contains("X-Powered-By"))
+                if (response.Headers.AllKeys.Any(k => k == "X-Powered-By"))
                 {
                     response.Headers.Remove("X-Powered-By");
                 }
 
                 // Remove X-AspNet-Version header (reveals ASP.NET version)
-                if (response.Headers.AllKeys.Contains("X-AspNet-Version"))
+                if (response.Headers.AllKeys.Any(k => k == "X-AspNet-Version"))
                 {
                     response.Headers.Remove("X-AspNet-Version");
                 }
 
                 // Remove X-AspNetMvc-Version header (reveals MVC version)
-                if (response.Headers.AllKeys.Contains("X-AspNetMvc-Version"))
+                if (response.Headers.AllKeys.Any(k => k == "X-AspNetMvc-Version"))
                 {
                     response.Headers.Remove("X-AspNetMvc-Version");
                 }

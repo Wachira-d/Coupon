@@ -202,8 +202,7 @@ namespace Coupon
         {
             try
             {
-                ErrorLogger.LogInfo("Application shutting down",
-                    $"Time: {DateTime.Now}, Reason: {HttpRuntime.ShutdownReason}");
+                ErrorLogger.LogInfo("Application shutting down", $"Time: {DateTime.Now}");
             }
             catch (Exception ex)
             {

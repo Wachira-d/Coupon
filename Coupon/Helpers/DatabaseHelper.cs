@@ -1,6 +1,7 @@
 using System;
 using System.Configuration;
 using System.Data;
+using System.Data.Common;
 using System.Data.SqlClient;
 using Npgsql;
 
@@ -211,24 +212,6 @@ namespace Coupon.Helpers
                 return sqlParam;
             }
             return new SqlParameter(param.ParameterName, param.Value);
-        }
-    }
-
-    /// <summary>
-    /// Base class for database parameters to support both SQL Server and PostgreSQL
-    /// </summary>
-    public abstract class DbParameter
-    {
-        public string ParameterName { get; set; }
-        public object Value { get; set; }
-    }
-
-    public class SqlDbParameter : DbParameter
-    {
-        public SqlDbParameter(string name, object value)
-        {
-            ParameterName = name;
-            Value = value ?? DBNull.Value;
         }
     }
 }

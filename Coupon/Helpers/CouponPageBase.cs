@@ -32,7 +32,7 @@ namespace Coupon.Helpers
         /// <summary>
         /// Common Page_Load logic for all coupon pages
         /// </summary>
-        protected void ProcessCouponPage(Image image1, Image image2, Image image3, Label label3, Button button1, Panel panel1, Panel panel2)
+        protected void ProcessCouponPage(System.Web.UI.WebControls.Image image1, System.Web.UI.WebControls.Image image2, System.Web.UI.WebControls.Image image3, Label label3, Button button1, Panel panel1, Panel panel2)
         {
             try
             {
@@ -102,7 +102,7 @@ namespace Coupon.Helpers
         /// <summary>
         /// Process coupon redemption
         /// </summary>
-        private void ProcessRedemption(string id, DataTable dtCode, Image image1, Panel panel1, Panel panel2)
+        private void ProcessRedemption(string id, DataTable dtCode, System.Web.UI.WebControls.Image image1, Panel panel1, Panel panel2)
         {
             try
             {
@@ -149,7 +149,7 @@ namespace Coupon.Helpers
         /// <summary>
         /// Display coupon information
         /// </summary>
-        private void DisplayCoupon(DataTable dtCode, Image image2, Image image3, Label label3, Button button1)
+        private void DisplayCoupon(DataTable dtCode, System.Web.UI.WebControls.Image image2, System.Web.UI.WebControls.Image image3, Label label3, Button button1)
         {
             try
             {
