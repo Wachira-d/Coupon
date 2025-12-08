@@ -7,11 +7,13 @@ namespace Coupon.Helpers
 {
     /// <summary>
     /// Error logging utility to replace empty catch blocks
+    /// Logs to both file and database for redundancy
     /// </summary>
     public static class ErrorLogger
     {
         private static readonly string LogPath = GetLogPath();
         private static readonly bool UseFixedLogFile = IsFixedLogFile();
+        private static readonly DatabaseHelper _dbHelper = new DatabaseHelper();
 
         private static string GetLogPath()
         {
@@ -67,6 +69,98 @@ namespace Coupon.Helpers
             }
             catch { }
             return false;
+        }
+
+        /// <summary>
+        /// Write log to database
+        /// IMPORTANT: This method should never throw exceptions to prevent logging failures from breaking the application
+        /// </summary>
+        private static void LogToDatabase(string logLevel, string message, Exception ex = null, string additionalInfo = null)
+        {
+            try
+            {
+                string requestUrl = null;
+                string userIP = null;
+                string userAgent = null;
+
+                // Collect request context if available
+                if (HttpContext.Current != null)
+                {
+                    try
+                    {
+                        requestUrl = HttpContext.Current.Request.Url?.ToString();
+                        userIP = HttpContext.Current.Request.UserHostAddress;
+                        userAgent = HttpContext.Current.Request.UserAgent;
+                    }
+                    catch
+                    {
+                        // Ignore if request context is not available
+                    }
+                }
+
+                // Prepare insert query
+                string query = $@"INSERT INTO {_dbHelper.GetTableName("ErrorLogs")}
+                    ({_dbHelper.GetColumnName("LogLevel")},
+                     {_dbHelper.GetColumnName("Message")},
+                     {_dbHelper.GetColumnName("ExceptionType")},
+                     {_dbHelper.GetColumnName("ExceptionMessage")},
+                     {_dbHelper.GetColumnName("StackTrace")},
+                     {_dbHelper.GetColumnName("InnerException")},
+                     {_dbHelper.GetColumnName("AdditionalInfo")},
+                     {_dbHelper.GetColumnName("RequestUrl")},
+                     {_dbHelper.GetColumnName("UserIP")},
+                     {_dbHelper.GetColumnName("UserAgent")},
+                     {_dbHelper.GetColumnName("CreatedDateTime")},
+                     {_dbHelper.GetColumnName("ServerName")},
+                     {_dbHelper.GetColumnName("ApplicationName")})
+                    VALUES
+                    (@logLevel, @message, @exceptionType, @exceptionMessage, @stackTrace,
+                     @innerException, @additionalInfo, @requestUrl, @userIP, @userAgent,
+                     @createdDateTime, @serverName, @applicationName)";
+
+                var parameters = new[]
+                {
+                    _dbHelper.CreateParameter("@logLevel", logLevel ?? ""),
+                    _dbHelper.CreateParameter("@message", TruncateString(message, 500)),
+                    _dbHelper.CreateParameter("@exceptionType", ex?.GetType().Name),
+                    _dbHelper.CreateParameter("@exceptionMessage", ex?.Message),
+                    _dbHelper.CreateParameter("@stackTrace", ex?.StackTrace),
+                    _dbHelper.CreateParameter("@innerException", ex?.InnerException?.ToString()),
+                    _dbHelper.CreateParameter("@additionalInfo", additionalInfo),
+                    _dbHelper.CreateParameter("@requestUrl", TruncateString(requestUrl, 500)),
+                    _dbHelper.CreateParameter("@userIP", TruncateString(userIP, 50)),
+                    _dbHelper.CreateParameter("@userAgent", TruncateString(userAgent, 500)),
+                    _dbHelper.CreateParameter("@createdDateTime", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                    _dbHelper.CreateParameter("@serverName", Environment.MachineName),
+                    _dbHelper.CreateParameter("@applicationName", "Coupon System")
+                };
+
+                _dbHelper.ExecuteNonQuery(query, parameters);
+            }
+            catch
+            {
+                // CRITICAL: Never throw exception from logging method
+                // If database logging fails, at least file logging should work
+                // Do nothing - fail silently to prevent infinite loops
+            }
+        }
+
+        /// <summary>
+        /// Truncate string to specified length to prevent database errors
+        /// </summary>
+        private static string TruncateString(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            if (value.Length <= maxLength)
+            {
+                return value;
+            }
+
+            return value.Substring(0, maxLength - 3) + "...";
         }
 
         /// <summary>
@@ -129,11 +223,22 @@ namespace Coupon.Helpers
 
                 // Write to file
                 File.AppendAllText(logFilePath, logMessage);
+
+                // ALSO write to database
+                LogToDatabase("ERROR", message, ex, additionalInfo);
             }
             catch
             {
                 // Last resort: cannot even log the error
-                // In production, you might want to log to Windows Event Log or other persistent storage
+                // Try database logging as fallback
+                try
+                {
+                    LogToDatabase("ERROR", message, ex, additionalInfo);
+                }
+                catch
+                {
+                    // Complete failure - give up silently to prevent infinite loops
+                }
             }
         }
 
@@ -169,10 +274,21 @@ namespace Coupon.Helpers
                 logMessage += new string('-', 80) + "\n\n";
 
                 File.AppendAllText(logFilePath, logMessage);
+
+                // ALSO write to database
+                LogToDatabase("WARNING", message, null, additionalInfo);
             }
             catch
             {
-                // Ignore logging errors
+                // Try database logging as fallback
+                try
+                {
+                    LogToDatabase("WARNING", message, null, additionalInfo);
+                }
+                catch
+                {
+                    // Complete failure - give up silently
+                }
             }
         }
 
@@ -208,10 +324,21 @@ namespace Coupon.Helpers
                 logMessage += new string('-', 80) + "\n\n";
 
                 File.AppendAllText(logFilePath, logMessage);
+
+                // ALSO write to database
+                LogToDatabase("INFO", message, null, additionalInfo);
             }
             catch
             {
-                // Ignore logging errors
+                // Try database logging as fallback
+                try
+                {
+                    LogToDatabase("INFO", message, null, additionalInfo);
+                }
+                catch
+                {
+                    // Complete failure - give up silently
+                }
             }
         }
     }
