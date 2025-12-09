@@ -124,6 +124,11 @@ namespace Coupon.Admin
                     txtPassword.Focus();
                 }
             }
+            catch (System.Threading.ThreadAbortException)
+            {
+                // This is expected from Response.Redirect - don't catch it
+                throw;
+            }
             catch (Exception ex)
             {
                 ErrorLogger.LogError("Login error", ex);
