@@ -94,17 +94,16 @@ namespace Coupon.Admin
                         $"Auth Source: {result.AuthSource}"
                     );
 
-                    // Redirect to admin page immediately
+                    // Determine redirect target
                     string returnUrl = ViewState["ReturnUrl"]?.ToString();
-                    if (!string.IsNullOrEmpty(returnUrl) && IsLocalUrl(returnUrl))
-                    {
-                        Response.Redirect(returnUrl);
-                    }
-                    else
-                    {
-                        Response.Redirect("~/Admin/Report.aspx");
-                    }
-                    return; // Stop further execution
+                    string targetUrl = (!string.IsNullOrEmpty(returnUrl) && IsLocalUrl(returnUrl))
+                        ? returnUrl
+                        : "~/Admin/Report.aspx";
+
+                    // Use proper ASP.NET redirect pattern (no ThreadAbortException)
+                    Response.Redirect(targetUrl, false);
+                    Context.ApplicationInstance.CompleteRequest();
+                    return;
                 }
                 else
                 {
