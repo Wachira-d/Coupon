@@ -524,6 +524,25 @@ namespace Coupon.Helpers
                 Groups = session["Groups"] as string[] ?? new string[0]
             };
         }
+
+        /// <summary>
+        /// Create authentication session for user
+        /// </summary>
+        public static void CreateAuthSession(System.Web.SessionState.HttpSessionState session, UserInfo user)
+        {
+            if (session == null || user == null)
+                return;
+
+            session["Username"] = user.Username;
+            session["DisplayName"] = user.DisplayName;
+            session["Email"] = user.Email;
+            session["Department"] = user.Department;
+            session["Title"] = user.Title;
+            session["Groups"] = user.Groups;
+            session["IsAuthenticated"] = user.IsAuthenticated;
+            session["AuthSource"] = user.AuthSource;
+            session["LoginTime"] = DateTime.Now;
+        }
     }
 
     /// <summary>
@@ -549,6 +568,8 @@ namespace Coupon.Helpers
         public string Title { get; set; }
         public string[] Groups { get; set; }
         public bool IsEnabled { get; set; }
+        public bool IsAuthenticated { get; set; }
+        public string AuthSource { get; set; }
     }
 
     /// <summary>

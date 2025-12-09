@@ -617,7 +617,8 @@ namespace Coupon.Admin
                 Response.Charset = "";
                 Response.ContentType = "application/text";
                 Response.ContentEncoding = Encoding.UTF8;
-                Response.BOM = Encoding.UTF8.GetPreamble();
+                // Write UTF-8 BOM for Excel compatibility
+                Response.BinaryWrite(Encoding.UTF8.GetPreamble());
 
                 StringBuilder sb = new StringBuilder();
 
