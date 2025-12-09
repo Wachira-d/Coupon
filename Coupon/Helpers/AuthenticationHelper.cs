@@ -30,7 +30,9 @@ namespace Coupon.Helpers
 
         static AuthenticationHelper()
         {
-            _httpClient.BaseAddress = new Uri(API_BASE_URL);
+            // Ensure BaseAddress ends with / for proper relative URL resolution
+            string baseUrl = API_BASE_URL.TrimEnd('/') + "/";
+            _httpClient.BaseAddress = new Uri(baseUrl);
             _httpClient.Timeout = TimeSpan.FromSeconds(API_TIMEOUT_SECONDS);
         }
 
@@ -208,8 +210,8 @@ namespace Coupon.Helpers
                 string json = JsonConvert.SerializeObject(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                // Create request with API Key header
-                var request = new HttpRequestMessage(HttpMethod.Post, "/ldap/authenticate")
+                // Create request with API Key header (no leading / for proper URL resolution)
+                var request = new HttpRequestMessage(HttpMethod.Post, "ldap/authenticate")
                 {
                     Content = content
                 };
