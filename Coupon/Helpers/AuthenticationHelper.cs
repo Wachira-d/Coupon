@@ -19,10 +19,10 @@ namespace Coupon.Helpers
         private static readonly HttpClient _httpClient = new HttpClient();
         private static readonly DatabaseHelper _dbHelper = new DatabaseHelper();
 
-        // Configuration (reduced timeout for faster response)
+        // Configuration
         private static readonly string API_BASE_URL = ConfigurationManager.AppSettings["AuthenApiBaseUrl"] ?? "https://authen-api.com/api";
         private static readonly string API_KEY = ConfigurationManager.AppSettings["AuthenApiKey"] ?? "";
-        private static readonly int API_TIMEOUT_SECONDS = int.Parse(ConfigurationManager.AppSettings["AuthenApiTimeout"] ?? "10");
+        private static readonly int API_TIMEOUT_SECONDS = int.Parse(ConfigurationManager.AppSettings["AuthenApiTimeout"] ?? "30");
         private static readonly int CACHE_DURATION_DAYS = int.Parse(ConfigurationManager.AppSettings["CacheDurationDays"] ?? "90");
         private static readonly string PASSWORD_SALT = ConfigurationManager.AppSettings["PasswordSalt"] ?? "HondaCX_2024_Salt";
         private static readonly int MAX_FAILED_ATTEMPTS = int.Parse(ConfigurationManager.AppSettings["MaxFailedAttempts"] ?? "5");
@@ -33,8 +33,7 @@ namespace Coupon.Helpers
             // Ensure BaseAddress ends with / for proper relative URL resolution
             string baseUrl = API_BASE_URL.TrimEnd('/') + "/";
             _httpClient.BaseAddress = new Uri(baseUrl);
-            // Use shorter timeout for faster login experience (max 10 seconds)
-            _httpClient.Timeout = TimeSpan.FromSeconds(Math.Min(API_TIMEOUT_SECONDS, 10));
+            _httpClient.Timeout = TimeSpan.FromSeconds(API_TIMEOUT_SECONDS);
         }
 
         /// <summary>
