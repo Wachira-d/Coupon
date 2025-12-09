@@ -148,9 +148,10 @@ namespace Coupon.Helpers
                     else
                     {
                         // Non-transient error or max retries reached
+                        // IMPORTANT: Use LogToFileOnly to prevent circular dependency (DB error → log to DB → DB error → ...)
                         try
                         {
-                            ErrorLogger.LogError($"Database {operationName} Error", ex, query);
+                            ErrorLogger.LogToFileOnly($"Database {operationName} Error", ex, query);
                         }
                         catch { }
                         throw;
