@@ -137,21 +137,21 @@ namespace Coupon.Admin
         private void ShowError(string message)
         {
             panelAlert.CssClass = "alert alert-error show";
-            litMessage.Text = $"<strong>❌ Error:</strong> {Server.HtmlEncode(message)}";
+            litMessage.Text = $"<strong>Error:</strong> {Server.HtmlEncode(message)}";
             panelAlert.Visible = true;
         }
 
         private void ShowSuccess(string message)
         {
             panelAlert.CssClass = "alert alert-success show";
-            litMessage.Text = $"<strong>✅ Success:</strong> {Server.HtmlEncode(message)}";
+            litMessage.Text = $"<strong>Success:</strong> {Server.HtmlEncode(message)}";
             panelAlert.Visible = true;
         }
 
         private void ShowInfo(string message)
         {
             panelAlert.CssClass = "alert alert-info show";
-            litMessage.Text = $"<strong>ℹ️ Info:</strong> {Server.HtmlEncode(message)}";
+            litMessage.Text = $"<strong>Info:</strong> {Server.HtmlEncode(message)}";
             panelAlert.Visible = true;
         }
 

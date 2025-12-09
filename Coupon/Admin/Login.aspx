@@ -233,7 +233,7 @@
     <form id="form1" runat="server">
         <div class="login-container">
             <div class="login-header">
-                <h1>🔐 Honda CX Coupon</h1>
+                <h1>Honda CX Coupon</h1>
                 <p>Admin Login Portal</p>
             </div>
 
@@ -243,9 +243,7 @@
                 </asp:Panel>
 
                 <div class="form-group">
-                    <label for="txtUsername">
-                        <span class="icon">👤</span>Username
-                    </label>
+                    <label for="txtUsername">Username</label>
                     <asp:TextBox ID="txtUsername" runat="server"
                                  placeholder="Enter your username"
                                  autocomplete="username"
@@ -254,9 +252,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="txtPassword">
-                        <span class="icon">🔑</span>Password
-                    </label>
+                    <label for="txtPassword">Password</label>
                     <asp:TextBox ID="txtPassword" runat="server"
                                  TextMode="Password"
                                  placeholder="Enter your password"
@@ -271,7 +267,7 @@
                 </div>
 
                 <asp:Button ID="btnLogin" runat="server"
-                           Text="🚀 Login"
+                           Text="Login"
                            CssClass="btn-login"
                            OnClick="btnLogin_Click"
                            OnClientClick="return validateForm();" />

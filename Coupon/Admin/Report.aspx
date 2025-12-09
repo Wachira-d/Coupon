@@ -352,54 +352,38 @@
     </style>
 
     <div class="report-container">
-        <!-- Login Panel (Hidden when authenticated) -->
-        <asp:Panel ID="pnlLogin" runat="server" Visible="true">
-            <div class="login-container">
-                <h3>🔐 Admin Login</h3>
-                <div class="login-form-group">
-                    <asp:TextBox ID="txtEmail" runat="server" placeholder="Email Address" />
-                </div>
-                <div class="login-form-group">
-                    <asp:TextBox ID="txtPassword" runat="server" TextMode="Password" placeholder="Password" />
-                </div>
-                <asp:Button ID="btnLogin" runat="server" Text="Sign In" CssClass="login-btn" OnClick="btnLogin_Click" />
-                <asp:Label ID="lblLoginError" runat="server" ForeColor="Red" Style="display: block; margin-top: 15px; text-align: center;" />
+        <!-- Dashboard Content (Authentication checked in code-behind) -->
+        <!-- User Header -->
+        <div class="user-header">
+            <div class="user-info">
+                <h4><asp:Label ID="lblCurrentUser" runat="server" /></h4>
+                <p><asp:Label ID="lblCurrentEmail" runat="server" /></p>
             </div>
-        </asp:Panel>
-
-        <!-- Dashboard Panel (Shown when authenticated) -->
-        <asp:Panel ID="pnlDashboard" runat="server" Visible="False">
-            <!-- User Header -->
-            <div class="user-header">
-                <div class="user-info">
-                    <h4>👤 <asp:Label ID="lblCurrentUser" runat="server" /></h4>
-                    <p>📧 <asp:Label ID="lblCurrentEmail" runat="server" /></p>
-                </div>
-                <div class="nav-buttons">
-                    <a href="/Admin/ImportCoupons.aspx">📥 Import Coupons</a>
-                    <a href="/Admin/Logout.aspx">🚪 Logout</a>
-                </div>
+            <div class="nav-buttons">
+                <a href="/Admin/ImportCoupons.aspx">Import Coupons</a>
+                <a href="/Admin/Logout.aspx">Logout</a>
             </div>
+        </div>
 
             <!-- Dashboard Statistics Cards -->
             <div class="dashboard-cards">
                 <div class="stat-card">
-                    <h6>📊 Total Coupons</h6>
+                    <h6>Total Coupons</h6>
                     <p class="value"><asp:Label ID="lblTotalCoupons" runat="server" Text="0" /></p>
                     <p class="label">All registered coupons</p>
                 </div>
                 <div class="stat-card sent">
-                    <h6>📨 Coupons Sent</h6>
+                    <h6>Coupons Sent</h6>
                     <p class="value"><asp:Label ID="lblCouponsSent" runat="server" Text="0" /></p>
                     <p class="label"><asp:Label ID="lblSentPercentage" runat="server" /></p>
                 </div>
                 <div class="stat-card used">
-                    <h6>✅ Coupons Used</h6>
+                    <h6>Coupons Used</h6>
                     <p class="value"><asp:Label ID="lblCouponsUsed" runat="server" Text="0" /></p>
                     <p class="label"><asp:Label ID="lblUsedPercentage" runat="server" /></p>
                 </div>
                 <div class="stat-card expired">
-                    <h6>⏰ Expired Coupons</h6>
+                    <h6>Expired Coupons</h6>
                     <p class="value"><asp:Label ID="lblExpiredCoupons" runat="server" Text="0" /></p>
                     <p class="label"><asp:Label ID="lblExpiredPercentage" runat="server" /></p>
                 </div>
@@ -407,7 +391,7 @@
 
             <!-- Coupon Search Panel -->
             <div class="search-panel">
-                <h5>🔍 Search Coupons</h5>
+                <h5>Search Coupons</h5>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -473,15 +457,15 @@
                 </div>
 
                 <div class="btn-actions">
-                    <asp:Button ID="btnClearCouponSearch" runat="server" Text="🔄 Clear" CssClass="btn-custom btn-secondary-custom" OnClick="btnClearCouponSearch_Click" />
-                    <asp:Button ID="btnSearchCoupons" runat="server" Text="🔍 Search Coupons" CssClass="btn-custom btn-primary-custom" OnClick="btnSearchCoupons_Click" />
-                    <asp:Button ID="btnExportCoupons" runat="server" Text="📥 Export to Excel" CssClass="btn-custom btn-success-custom" OnClick="btnExportCoupons_Click" />
+                    <asp:Button ID="btnClearCouponSearch" runat="server" Text="Clear" CssClass="btn-custom btn-secondary-custom" OnClick="btnClearCouponSearch_Click" />
+                    <asp:Button ID="btnSearchCoupons" runat="server" Text="Search Coupons" CssClass="btn-custom btn-primary-custom" OnClick="btnSearchCoupons_Click" />
+                    <asp:Button ID="btnExportCoupons" runat="server" Text="Export to Excel" CssClass="btn-custom btn-success-custom" OnClick="btnExportCoupons_Click" />
                 </div>
             </div>
 
             <!-- Access Logs Search Panel -->
             <div class="search-panel">
-                <h5>📋 Search Access Logs</h5>
+                <h5>Search Access Logs</h5>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -515,9 +499,9 @@
                 </div>
 
                 <div class="btn-actions">
-                    <asp:Button ID="btnClearLogSearch" runat="server" Text="🔄 Clear" CssClass="btn-custom btn-secondary-custom" OnClick="btnClearLogSearch_Click" />
-                    <asp:Button ID="btnSearchLogs" runat="server" Text="🔍 Search Logs" CssClass="btn-custom btn-primary-custom" OnClick="btnSearchLogs_Click" />
-                    <asp:Button ID="btnExportLogs" runat="server" Text="📥 Export to Excel" CssClass="btn-custom btn-success-custom" OnClick="btnExportLogs_Click" />
+                    <asp:Button ID="btnClearLogSearch" runat="server" Text="Clear" CssClass="btn-custom btn-secondary-custom" OnClick="btnClearLogSearch_Click" />
+                    <asp:Button ID="btnSearchLogs" runat="server" Text="Search Logs" CssClass="btn-custom btn-primary-custom" OnClick="btnSearchLogs_Click" />
+                    <asp:Button ID="btnExportLogs" runat="server" Text="Export to Excel" CssClass="btn-custom btn-success-custom" OnClick="btnExportLogs_Click" />
                 </div>
             </div>
 
@@ -525,7 +509,7 @@
             <asp:Panel ID="pnlResults" runat="server" Visible="false">
                 <div class="gridview-container">
                     <div class="grid-header">
-                        <h5>📊 Search Results</h5>
+                        <h5>Search Results</h5>
                         <div class="grid-info">
                             <asp:Label ID="lblResultCount" runat="server" />
                         </div>
@@ -540,10 +524,9 @@
                         OnSorting="gvResults_Sorting"
                         EmptyDataText="No records found">
                         <PagerStyle CssClass="pagination" HorizontalAlign="Center" />
-                        <PagerSettings Mode="NumericFirstLast" PageButtonCount="10" FirstPageText="⏮ First" LastPageText="Last ⏭" />
+                        <PagerSettings Mode="NumericFirstLast" PageButtonCount="10" FirstPageText="First" LastPageText="Last" />
                     </asp:GridView>
                 </div>
             </asp:Panel>
-        </asp:Panel>
     </div>
 </asp:Content>

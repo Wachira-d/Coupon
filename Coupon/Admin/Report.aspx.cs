@@ -28,29 +28,25 @@ namespace Coupon.Admin
                 _currentSearchResults = (DataTable)ViewState["SearchResults"];
             }
 
-            // SECURITY: Check authentication
+            // SECURITY: Check authentication - redirect to Login page if not authenticated
             if (!AuthenticationHelper.ValidateSession(Session))
             {
-                pnlLogin.Visible = true;
-                pnlDashboard.Visible = false;
+                Response.Redirect("~/Admin/Login.aspx?ReturnUrl=" + Server.UrlEncode(Request.RawUrl), false);
+                Context.ApplicationInstance.CompleteRequest();
+                return;
             }
-            else
+
+            if (!IsPostBack)
             {
-                pnlLogin.Visible = false;
-                pnlDashboard.Visible = true;
-
-                if (!IsPostBack)
+                // Show user info
+                UserInfo currentUser = AuthenticationHelper.GetCurrentUser(Session);
+                if (currentUser != null)
                 {
-                    // Show user info
-                    UserInfo currentUser = AuthenticationHelper.GetCurrentUser(Session);
-                    if (currentUser != null)
-                    {
-                        lblCurrentUser.Text = currentUser.DisplayName ?? currentUser.Username;
-                        lblCurrentEmail.Text = currentUser.Email ?? "";
-                    }
-
-                    LoadDashboardStatistics();
+                    lblCurrentUser.Text = currentUser.DisplayName ?? currentUser.Username;
+                    lblCurrentEmail.Text = currentUser.Email ?? "";
                 }
+
+                LoadDashboardStatistics();
             }
         }
 
@@ -128,107 +124,7 @@ namespace Coupon.Admin
 
         #endregion
 
-        #region Authentication
-
-        /// <summary>
-        /// Admin login handler
-        /// SECURITY: LDAP authentication with email validation
-        /// </summary>
-        protected void btnLogin_Click(object sender, EventArgs e)
-        {
-            string email = txtEmail.Text?.Trim();
-            string password = txtPassword.Text;
-            string ipAddress = GetClientIpAddress();
-
-            // Validate input
-            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
-            {
-                lblLoginError.Text = "Email and password required";
-                LogAdminAccess(email, false);
-                return;
-            }
-
-            // Validate email format
-            if (!InputValidator.IsValidEmail(email))
-            {
-                lblLoginError.Text = "Invalid email format";
-                LogAdminAccess(email, false);
-                return;
-            }
-
-            // Check if email is authorized
-            string[] authorizedEmails = ConfigurationManager.AppSettings["ReportPassword"]?.Split(';') ?? new string[0];
-            bool isAuthorized = false;
-
-            foreach (string authorizedEmail in authorizedEmails)
-            {
-                if (email.Equals(authorizedEmail.Trim(), StringComparison.OrdinalIgnoreCase))
-                {
-                    isAuthorized = true;
-                    break;
-                }
-            }
-
-            if (!isAuthorized)
-            {
-                lblLoginError.Text = "Unauthorized access";
-                AuditLogger.LogSecurityEvent("Unauthorized Admin Access", ipAddress,
-                    $"Email: {email}", SecuritySeverity.High);
-                LogAdminAccess(email, false);
-                return;
-            }
-
-            // Validate credentials using AuthenticationHelper (uses AuthenAPI with X-API-Key)
-            AuthResult authResult;
-            try
-            {
-                authResult = AuthenticationHelper.Authenticate(email, password, ipAddress, Request.UserAgent);
-            }
-            catch (Exception ex)
-            {
-                lblLoginError.Text = "Authentication system error";
-                ErrorLogger.LogError("Authentication error", ex, $"Email: {email}");
-                LogAdminAccess(email, false);
-                return;
-            }
-
-            if (authResult.Success)
-            {
-                // Create session using auth result or fallback values
-                UserInfo user = authResult.User ?? new UserInfo();
-
-                // Ensure essential fields are always set
-                if (string.IsNullOrEmpty(user.Username))
-                    user.Username = email;
-                if (string.IsNullOrEmpty(user.DisplayName))
-                    user.DisplayName = email.Split('@')[0];
-                if (string.IsNullOrEmpty(user.Email))
-                    user.Email = email;
-
-                user.IsAuthenticated = true;
-                user.AuthSource = authResult.AuthSource ?? "API";
-
-                // Set authentication session data
-                AuthenticationHelper.CreateAuthSession(Session, user);
-
-                // Security: Regenerate session token (prevents session fixation)
-                SessionManager.RegenerateSessionId(Context);
-
-                // Log success
-                AuditLogger.LogAuthentication(email, true, ipAddress, "Admin panel access");
-                LogAdminAccess(email, true);
-
-                // Reload page
-                Response.Redirect(Request.RawUrl, false);
-                Context.ApplicationInstance.CompleteRequest();
-            }
-            else
-            {
-                lblLoginError.Text = authResult.Message ?? "Authentication failed";
-                AuditLogger.LogAuthentication(email, false, ipAddress, authResult.Message ?? "Authentication failed");
-                LogAdminAccess(email, false);
-            }
-        }
+        #region Helper Methods
 
         /// <summary>
         /// Log admin access attempts
