@@ -17,6 +17,16 @@ namespace Coupon.Admin
         protected global::System.Web.UI.HtmlControls.HtmlForm form1;
 
         /// <summary>
+        /// lblCurrentUser control.
+        /// </summary>
+        protected global::System.Web.UI.WebControls.Label lblCurrentUser;
+
+        /// <summary>
+        /// lblCurrentEmail control.
+        /// </summary>
+        protected global::System.Web.UI.WebControls.Label lblCurrentEmail;
+
+        /// <summary>
         /// fileUpload control.
         /// </summary>
         protected global::System.Web.UI.WebControls.FileUpload fileUpload;

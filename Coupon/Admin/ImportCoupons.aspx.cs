@@ -30,12 +30,12 @@ namespace Coupon.Admin
 
             if (!IsPostBack)
             {
-                // Show user info if needed
+                // Show user info
                 UserInfo currentUser = AuthenticationHelper.GetCurrentUser(Session);
                 if (currentUser != null)
                 {
-                    // You can display welcome message or user info here
-                    // e.g., lblWelcome.Text = $"Welcome, {currentUser.DisplayName}";
+                    lblCurrentUser.Text = currentUser.DisplayName ?? currentUser.Username;
+                    lblCurrentEmail.Text = currentUser.Email ?? "";
                 }
 
                 // Initialize page

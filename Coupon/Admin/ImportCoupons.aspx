@@ -284,6 +284,18 @@
                 <p>Upload CSV or Excel file to import multiple coupons at once</p>
             </div>
 
+            <!-- User Info Bar -->
+            <div style="background: #f8f9fa; padding: 12px 30px; border-bottom: 2px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
+                <div style="color: #555;">
+                    <strong>👤 <asp:Label ID="lblCurrentUser" runat="server" /></strong>
+                    <span style="margin-left: 15px;">📧 <asp:Label ID="lblCurrentEmail" runat="server" /></span>
+                </div>
+                <div>
+                    <a href="/Admin/Report.aspx" style="color: #667eea; text-decoration: none; padding: 6px 12px; background: white; border: 1px solid #667eea; border-radius: 5px; margin-right: 8px; display: inline-block; font-size: 14px;">📊 Report</a>
+                    <a href="/Admin/Logout.aspx" style="color: white; text-decoration: none; padding: 6px 12px; background: #667eea; border-radius: 5px; display: inline-block; font-size: 14px;">🚪 Logout</a>
+                </div>
+            </div>
+
             <div class="content">
                 <!-- Step 1: Upload File -->
                 <div class="step">

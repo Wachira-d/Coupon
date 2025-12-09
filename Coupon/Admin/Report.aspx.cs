@@ -37,8 +37,8 @@ namespace Coupon.Admin
                 UserInfo currentUser = AuthenticationHelper.GetCurrentUser(Session);
                 if (currentUser != null)
                 {
-                    // You can display welcome message or user info here if needed
-                    // e.g., lblWelcome.Text = $"Welcome, {currentUser.DisplayName}";
+                    lblCurrentUser.Text = currentUser.DisplayName ?? currentUser.Username;
+                    lblCurrentEmail.Text = currentUser.Email ?? "";
                 }
 
                 LoadDashboardStats();

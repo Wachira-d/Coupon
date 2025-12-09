@@ -7,6 +7,17 @@
     <p>
 &nbsp;<asp:Button ID="Button1" runat="server" Text="Login" OnClick="Button1_Click" Width="30%" />
         <asp:Panel ID="Panel1" runat="server" Visible="False">
+            <!-- User Info Header -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="font-size: 16px;">👤 Logged in as: <asp:Label ID="lblCurrentUser" runat="server" /></strong>
+                    <span style="margin-left: 20px; opacity: 0.9; font-size: 14px;">📧 <asp:Label ID="lblCurrentEmail" runat="server" /></span>
+                </div>
+                <div>
+                    <a href="/Admin/ImportCoupons.aspx" style="color: white; text-decoration: none; padding: 8px 15px; background: rgba(255,255,255,0.2); border-radius: 5px; margin-right: 10px; display: inline-block;">📥 Import Coupons</a>
+                    <a href="/Admin/Logout.aspx" style="color: white; text-decoration: none; padding: 8px 15px; background: rgba(255,255,255,0.2); border-radius: 5px; display: inline-block;">🚪 Logout</a>
+                </div>
+            </div>
 
              <br />
  <table style="width:90%;">
