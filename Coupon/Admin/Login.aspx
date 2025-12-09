@@ -299,10 +299,13 @@
                 return false;
             }
 
-            // Show loading state
+            // Show loading state AFTER form submission starts
+            // Using setTimeout to delay disabling - otherwise postback is cancelled
             var btn = document.getElementById('<%= btnLogin.ClientID %>');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="loading"></span>Authenticating...';
+            setTimeout(function() {
+                btn.disabled = true;
+                btn.value = 'Authenticating...';
+            }, 100);
 
             return true;
         }

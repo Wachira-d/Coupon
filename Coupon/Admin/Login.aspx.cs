@@ -140,7 +140,7 @@ namespace Coupon.Admin
             // Re-enable the login button via JavaScript
             ClientScript.RegisterStartupScript(this.GetType(), "enableBtn",
                 "document.getElementById('" + btnLogin.ClientID + "').disabled = false; " +
-                "document.getElementById('" + btnLogin.ClientID + "').innerHTML = 'Login';", true);
+                "document.getElementById('" + btnLogin.ClientID + "').value = 'Login';", true);
         }
 
         private void ShowSuccess(string message)
