@@ -2,7 +2,6 @@ using System;
 using System.Configuration;
 using System.Data;
 using System.Data.Common;
-using System.DirectoryServices.AccountManagement;
 using System.IO;
 using System.Text;
 using System.Web;
@@ -179,44 +178,31 @@ namespace Coupon.Admin
                 return;
             }
 
-            // Validate against LDAP
-            bool isValid = false;
+            // Validate credentials using AuthenticationHelper (uses AuthenAPI with X-API-Key)
+            AuthResult authResult;
             try
             {
-                string ldapServer = ConfigurationManager.AppSettings["LDAP"];
-                if (!string.IsNullOrEmpty(ldapServer))
-                {
-                    using (PrincipalContext pc = new PrincipalContext(ContextType.Domain, ldapServer))
-                    {
-                        isValid = pc.ValidateCredentials(email, password);
-                    }
-                }
-                else
-                {
-                    lblLoginError.Text = "Authentication system error";
-                    ErrorLogger.LogError("LDAP server not configured", null);
-                    return;
-                }
+                authResult = AuthenticationHelper.Authenticate(email, password, ipAddress, Request.UserAgent);
             }
             catch (Exception ex)
             {
                 lblLoginError.Text = "Authentication system error";
-                ErrorLogger.LogError("LDAP authentication error", ex, $"Email: {email}");
+                ErrorLogger.LogError("Authentication error", ex, $"Email: {email}");
                 LogAdminAccess(email, false);
                 return;
             }
 
-            if (isValid)
+            if (authResult.Success)
             {
-                // Create session
-                UserInfo user = new UserInfo
+                // Create session using auth result or fallback values
+                UserInfo user = authResult.User ?? new UserInfo
                 {
                     Username = email,
                     DisplayName = email.Split('@')[0],
-                    Email = email,
-                    IsAuthenticated = true,
-                    AuthSource = "LDAP"
+                    Email = email
                 };
+                user.IsAuthenticated = true;
+                user.AuthSource = authResult.AuthSource ?? "API";
 
                 AuthenticationHelper.CreateAuthSession(Session, user);
 
@@ -233,8 +219,8 @@ namespace Coupon.Admin
             }
             else
             {
-                lblLoginError.Text = "Invalid password";
-                AuditLogger.LogAuthentication(email, false, ipAddress, "Invalid password");
+                lblLoginError.Text = authResult.Message ?? "Authentication failed";
+                AuditLogger.LogAuthentication(email, false, ipAddress, authResult.Message ?? "Authentication failed");
                 LogAdminAccess(email, false);
             }
         }
