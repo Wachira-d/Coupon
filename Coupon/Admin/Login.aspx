@@ -269,7 +269,17 @@
                 <asp:Button ID="btnLogin" runat="server"
                            Text="Login"
                            CssClass="btn-login"
-                           OnClick="btnLogin_Click" />
+                           OnClick="btnLogin_Click"
+                           OnClientClick="return showLoading();" />
+
+                <!-- Loading overlay -->
+                <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+                    <div style="background:white; padding:30px 50px; border-radius:10px; text-align:center; box-shadow:0 5px 30px rgba(0,0,0,0.3);">
+                        <div class="loading" style="width:40px; height:40px; border-width:4px; margin:0 auto 15px;"></div>
+                        <div style="font-size:16px; color:#333;">Authenticating...</div>
+                        <div style="font-size:13px; color:#666; margin-top:5px;">Please wait</div>
+                    </div>
+                </div>
             </div>
 
             <div class="login-footer">
@@ -289,6 +299,28 @@
                 usernameField.focus();
             }
         };
+
+        // Show loading overlay when login button is clicked
+        function showLoading() {
+            var username = document.getElementById('<%= txtUsername.ClientID %>').value;
+            var password = document.getElementById('<%= txtPassword.ClientID %>').value;
+
+            // Validate before showing loading
+            if (!username || !password) {
+                return true; // Let server-side validation handle it
+            }
+
+            // Show loading overlay
+            var overlay = document.getElementById('loadingOverlay');
+            overlay.style.display = 'flex';
+
+            // Disable login button
+            var btn = document.getElementById('<%= btnLogin.ClientID %>');
+            btn.disabled = true;
+            btn.value = 'Logging in...';
+
+            return true; // Allow form submission
+        }
     </script>
 </body>
 </html>
