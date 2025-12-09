@@ -31,7 +31,7 @@ namespace Coupon
                     new Exception("This is a test exception from TestLogs.aspx"),
                     $"Test IP: {Request.UserHostAddress}");
 
-                lblErrorResult.Text = "✅ SUCCESS: Error log written successfully!\n\n";
+                lblErrorResult.Text = "[OK] SUCCESS: Error log written successfully!\n\n";
                 lblErrorResult.Text += "Check log file at:\n";
                 lblErrorResult.Text += GetLogPath("Error");
                 lblErrorResult.CssClass = "result success";
@@ -39,7 +39,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                lblErrorResult.Text = "❌ FAILED: " + ex.Message + "\n\n";
+                lblErrorResult.Text = "[FAILED]: " + ex.Message + "\n\n";
                 lblErrorResult.Text += ex.StackTrace;
                 lblErrorResult.CssClass = "result error";
                 lblErrorResult.Visible = true;
@@ -53,7 +53,7 @@ namespace Coupon
                 ErrorLogger.LogWarning("Test Warning Message",
                     $"Test warning from TestLogs.aspx, IP: {Request.UserHostAddress}");
 
-                lblErrorResult.Text = "✅ SUCCESS: Warning log written successfully!\n\n";
+                lblErrorResult.Text = "[OK] SUCCESS: Warning log written successfully!\n\n";
                 lblErrorResult.Text += "Check log file at:\n";
                 lblErrorResult.Text += GetLogPath("Warning");
                 lblErrorResult.CssClass = "result success";
@@ -61,7 +61,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                lblErrorResult.Text = "❌ FAILED: " + ex.Message + "\n\n";
+                lblErrorResult.Text = "[FAILED]: " + ex.Message + "\n\n";
                 lblErrorResult.Text += ex.StackTrace;
                 lblErrorResult.CssClass = "result error";
                 lblErrorResult.Visible = true;
@@ -75,7 +75,7 @@ namespace Coupon
                 ErrorLogger.LogInfo("Test Info Message",
                     $"Test info log from TestLogs.aspx, IP: {Request.UserHostAddress}");
 
-                lblErrorResult.Text = "✅ SUCCESS: Info log written successfully!\n\n";
+                lblErrorResult.Text = "[OK] SUCCESS: Info log written successfully!\n\n";
                 lblErrorResult.Text += "Check log file at:\n";
                 lblErrorResult.Text += GetLogPath("Info");
                 lblErrorResult.CssClass = "result success";
@@ -83,7 +83,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                lblErrorResult.Text = "❌ FAILED: " + ex.Message + "\n\n";
+                lblErrorResult.Text = "[FAILED]: " + ex.Message + "\n\n";
                 lblErrorResult.Text += ex.StackTrace;
                 lblErrorResult.CssClass = "result error";
                 lblErrorResult.Visible = true;
@@ -104,7 +104,7 @@ namespace Coupon
                     Request.UserHostAddress,
                     "Test authentication log from TestLogs.aspx");
 
-                lblAuditResult.Text = "✅ SUCCESS: Authentication log written successfully!\n\n";
+                lblAuditResult.Text = "[OK] SUCCESS: Authentication log written successfully!\n\n";
                 lblAuditResult.Text += "Check log file at:\n";
                 lblAuditResult.Text += GetAuditLogPath();
                 lblAuditResult.CssClass = "result success";
@@ -112,7 +112,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                lblAuditResult.Text = "❌ FAILED: " + ex.Message + "\n\n";
+                lblAuditResult.Text = "[FAILED]: " + ex.Message + "\n\n";
                 lblAuditResult.Text += ex.StackTrace;
                 lblAuditResult.CssClass = "result error";
                 lblAuditResult.Visible = true;
@@ -129,7 +129,7 @@ namespace Coupon
                     "This is a test security event from TestLogs.aspx",
                     SecuritySeverity.Medium);
 
-                lblAuditResult.Text = "✅ SUCCESS: Security event log written successfully!\n\n";
+                lblAuditResult.Text = "[OK] SUCCESS: Security event log written successfully!\n\n";
                 lblAuditResult.Text += "Check log file at:\n";
                 lblAuditResult.Text += GetAuditLogPath();
                 lblAuditResult.CssClass = "result success";
@@ -137,7 +137,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                lblAuditResult.Text = "❌ FAILED: " + ex.Message + "\n\n";
+                lblAuditResult.Text = "[FAILED]: " + ex.Message + "\n\n";
                 lblAuditResult.Text += ex.StackTrace;
                 lblAuditResult.CssClass = "result error";
                 lblAuditResult.Visible = true;
@@ -154,7 +154,7 @@ namespace Coupon
                     200,
                     Request.UserHostAddress);
 
-                lblAuditResult.Text = "✅ SUCCESS: Coupon redemption log written successfully!\n\n";
+                lblAuditResult.Text = "[OK] SUCCESS: Coupon redemption log written successfully!\n\n";
                 lblAuditResult.Text += "Check log file at:\n";
                 lblAuditResult.Text += GetAuditLogPath();
                 lblAuditResult.CssClass = "result success";
@@ -162,7 +162,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                lblAuditResult.Text = "❌ FAILED: " + ex.Message + "\n\n";
+                lblAuditResult.Text = "[FAILED]: " + ex.Message + "\n\n";
                 lblAuditResult.Text += ex.StackTrace;
                 lblAuditResult.CssClass = "result error";
                 lblAuditResult.Visible = true;
@@ -176,7 +176,7 @@ namespace Coupon
         protected void btnCheckFolders_Click(object sender, EventArgs e)
         {
             StringBuilder result = new StringBuilder();
-            result.AppendLine("📁 FOLDER STATUS CHECK\n");
+            result.AppendLine("FOLDER STATUS CHECK\n");
             result.AppendLine("═══════════════════════════════════════\n");
 
             string basePath = Server.MapPath("~/App_Data");
@@ -197,7 +197,7 @@ namespace Coupon
             CheckFolder(result, "Barcode", barcodePath);
 
             // Try to create test file
-            result.AppendLine("\n📝 WRITE PERMISSION TEST\n");
+            result.AppendLine("\nWRITE PERMISSION TEST\n");
             result.AppendLine("═══════════════════════════════════════\n");
 
             try
@@ -205,11 +205,11 @@ namespace Coupon
                 string testFile = Path.Combine(logsPath, "test_write.txt");
                 File.WriteAllText(testFile, "Test write at " + DateTime.Now);
                 File.Delete(testFile);
-                result.AppendLine("✅ Logs folder: WRITABLE");
+                result.AppendLine("[OK] Logs folder: WRITABLE");
             }
             catch (Exception ex)
             {
-                result.AppendLine("❌ Logs folder: NOT WRITABLE");
+                result.AppendLine("[ERROR] Logs folder: NOT WRITABLE");
                 result.AppendLine("   Error: " + ex.Message);
             }
 
@@ -218,11 +218,11 @@ namespace Coupon
                 string testFile = Path.Combine(auditLogsPath, "test_write.txt");
                 File.WriteAllText(testFile, "Test write at " + DateTime.Now);
                 File.Delete(testFile);
-                result.AppendLine("✅ AuditLogs folder: WRITABLE");
+                result.AppendLine("[OK] AuditLogs folder: WRITABLE");
             }
             catch (Exception ex)
             {
-                result.AppendLine("❌ AuditLogs folder: NOT WRITABLE");
+                result.AppendLine("[ERROR] AuditLogs folder: NOT WRITABLE");
                 result.AppendLine("   Error: " + ex.Message);
             }
 
@@ -233,11 +233,11 @@ namespace Coupon
 
         private void CheckFolder(StringBuilder result, string name, string path)
         {
-            result.Append($"📂 {name}: ");
+            result.Append($"[{name}]: ");
 
             if (Directory.Exists(path))
             {
-                result.AppendLine("✅ EXISTS");
+                result.AppendLine("[OK] EXISTS");
                 result.AppendLine($"   Path: {path}");
 
                 // List files
@@ -255,18 +255,18 @@ namespace Coupon
             }
             else
             {
-                result.AppendLine("❌ MISSING");
+                result.AppendLine("[MISSING]");
                 result.AppendLine($"   Expected path: {path}");
 
                 // Try to create
                 try
                 {
                     Directory.CreateDirectory(path);
-                    result.AppendLine("   ✅ Created successfully!");
+                    result.AppendLine("   [OK] Created successfully!");
                 }
                 catch (Exception ex)
                 {
-                    result.AppendLine($"   ❌ Cannot create: {ex.Message}");
+                    result.AppendLine($"   [ERROR] Cannot create: {ex.Message}");
                 }
             }
 
@@ -314,13 +314,13 @@ namespace Coupon
                 }
                 else
                 {
-                    lblLogViewer.Text = $"❌ Log file not found: {logPath}";
+                    lblLogViewer.Text = $"[ERROR] Log file not found: {logPath}";
                     lblLogViewer.Visible = true;
                 }
             }
             catch (Exception ex)
             {
-                lblLogViewer.Text = $"❌ Error reading log file: {ex.Message}";
+                lblLogViewer.Text = $"[ERROR] Error reading log file: {ex.Message}";
                 lblLogViewer.Visible = true;
             }
         }
@@ -352,13 +352,13 @@ namespace Coupon
                 }
                 else
                 {
-                    lblLogViewer.Text = $"❌ Log file not found: {logPath}";
+                    lblLogViewer.Text = $"[ERROR] Log file not found: {logPath}";
                     lblLogViewer.Visible = true;
                 }
             }
             catch (Exception ex)
             {
-                lblLogViewer.Text = $"❌ Error reading log file: {ex.Message}";
+                lblLogViewer.Text = $"[ERROR] Error reading log file: {ex.Message}";
                 lblLogViewer.Visible = true;
             }
         }

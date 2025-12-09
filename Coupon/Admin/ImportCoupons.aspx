@@ -287,12 +287,12 @@
             <!-- User Info Bar -->
             <div style="background: #f8f9fa; padding: 12px 30px; border-bottom: 2px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
                 <div style="color: #555;">
-                    <strong>👤 <asp:Label ID="lblCurrentUser" runat="server" /></strong>
-                    <span style="margin-left: 15px;">📧 <asp:Label ID="lblCurrentEmail" runat="server" /></span>
+                    <strong><asp:Label ID="lblCurrentUser" runat="server" /></strong>
+                    <span style="margin-left: 15px;"><asp:Label ID="lblCurrentEmail" runat="server" /></span>
                 </div>
                 <div>
-                    <a href="/Admin/Report.aspx" style="color: #667eea; text-decoration: none; padding: 6px 12px; background: white; border: 1px solid #667eea; border-radius: 5px; margin-right: 8px; display: inline-block; font-size: 14px;">📊 Report</a>
-                    <a href="/Admin/Logout.aspx" style="color: white; text-decoration: none; padding: 6px 12px; background: #667eea; border-radius: 5px; display: inline-block; font-size: 14px;">🚪 Logout</a>
+                    <a href="/Admin/Report.aspx" style="color: #667eea; text-decoration: none; padding: 6px 12px; background: white; border: 1px solid #667eea; border-radius: 5px; margin-right: 8px; display: inline-block; font-size: 14px;">Report</a>
+                    <a href="/Admin/Logout.aspx" style="color: white; text-decoration: none; padding: 6px 12px; background: #667eea; border-radius: 5px; display: inline-block; font-size: 14px;">Logout</a>
                 </div>
             </div>
 
@@ -305,14 +305,14 @@
                     </div>
                     <div class="file-upload">
                         <label for="fileUpload" class="file-upload-label">
-                            <div class="icon">📁</div>
+                            <div class="icon">[File]</div>
                             <div class="text">Click to select file or drag and drop</div>
                             <div class="hint">Supported formats: CSV (.csv), Excel (.xlsx, .xls)</div>
                         </label>
                         <asp:FileUpload ID="fileUpload" runat="server" CssClass="form-control" style="display:none;" onchange="document.querySelector('.file-upload-label .text').textContent = this.files[0]?.name || 'Click to select file or drag and drop'" />
                     </div>
                     <div style="margin-top: 20px;">
-                        <asp:Button ID="btnUpload" runat="server" Text="📤 Upload & Preview" CssClass="btn btn-primary" OnClick="btnUpload_Click" />
+                        <asp:Button ID="btnUpload" runat="server" Text="Upload &amp; Preview" CssClass="btn btn-primary" OnClick="btnUpload_Click" />
                     </div>
                 </div>
 
@@ -325,14 +325,14 @@
                         </div>
 
                         <div class="alert alert-info">
-                            <strong>📋 Preview:</strong> Showing first 10 rows from your file
+                            <strong>Preview:</strong> Showing first 10 rows from your file
                         </div>
 
                         <div style="overflow-x: auto;">
                             <asp:GridView ID="gvPreview" runat="server" CssClass="preview-table" AutoGenerateColumns="true" />
                         </div>
 
-                        <h3 style="margin-top: 30px; margin-bottom: 15px;">🔗 Map Your Columns</h3>
+                        <h3 style="margin-top: 30px; margin-bottom: 15px;">Map Your Columns</h3>
                         <div class="column-map">
                             <div class="map-item">
                                 <div class="map-label">Coupon ID Column:</div>
@@ -366,7 +366,7 @@
                         </div>
 
                         <div class="form-group" style="margin-top: 20px;">
-                            <label>📝 Lot Description (Optional):</label>
+                            <label>Lot Description (Optional):</label>
                             <asp:TextBox ID="txtDescription" runat="server" CssClass="form-control" placeholder="e.g., Honda CX Campaign 2025" TextMode="MultiLine" Rows="3" />
                         </div>
                     </div>

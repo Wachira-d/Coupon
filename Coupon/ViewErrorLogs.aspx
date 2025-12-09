@@ -198,7 +198,7 @@
 <body>
     <form id="form1" runat="server">
         <div class="container">
-            <h1>📊 Error Logs Viewer (Database)</h1>
+            <h1>Error Logs Viewer (Database)</h1>
 
             <!-- Statistics -->
             <div class="stats">
@@ -259,10 +259,10 @@
 
             <!-- Action Buttons -->
             <div style="margin-bottom: 20px;">
-                <asp:Button ID="btnSearch" runat="server" Text="🔍 Search" CssClass="btn btn-primary" OnClick="btnSearch_Click" />
-                <asp:Button ID="btnRefresh" runat="server" Text="🔄 Refresh" CssClass="btn btn-success" OnClick="btnRefresh_Click" />
-                <asp:Button ID="btnExport" runat="server" Text="📥 Export CSV" CssClass="btn btn-success" OnClick="btnExport_Click" />
-                <asp:Button ID="btnDeleteOld" runat="server" Text="🗑️ Delete Logs >30 Days" CssClass="btn btn-danger" OnClick="btnDeleteOld_Click" OnClientClick="return confirm('Are you sure you want to delete logs older than 30 days?');" />
+                <asp:Button ID="btnSearch" runat="server" Text="Search" CssClass="btn btn-primary" OnClick="btnSearch_Click" />
+                <asp:Button ID="btnRefresh" runat="server" Text="Refresh" CssClass="btn btn-success" OnClick="btnRefresh_Click" />
+                <asp:Button ID="btnExport" runat="server" Text="Export CSV" CssClass="btn btn-success" OnClick="btnExport_Click" />
+                <asp:Button ID="btnDeleteOld" runat="server" Text="Delete Logs >30 Days" CssClass="btn btn-danger" OnClick="btnDeleteOld_Click" OnClientClick="return confirm('Are you sure you want to delete logs older than 30 days?');" />
             </div>
 
             <!-- Results -->

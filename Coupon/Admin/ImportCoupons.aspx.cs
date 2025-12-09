@@ -573,7 +573,7 @@ namespace Coupon.Admin
             if (successCount > 0)
             {
                 html.Append("<div class='alert alert-success'>");
-                html.Append($"<h3>✅ Import Successful!</h3>");
+                html.Append($"<h3>Import Successful!</h3>");
                 html.Append($"<p><strong>{successCount}</strong> coupons imported successfully</p>");
                 html.Append("</div>");
             }
@@ -633,7 +633,7 @@ namespace Coupon.Admin
         {
             StringBuilder html = new StringBuilder();
             html.Append("<div class='alert alert-error' style='margin-bottom:20px;'>");
-            html.Append($"<strong>❌ Error:</strong> {System.Web.HttpUtility.HtmlEncode(message)}");
+            html.Append($"<strong>Error:</strong> {System.Web.HttpUtility.HtmlEncode(message)}");
             html.Append("</div>");
 
             // Show at top of content

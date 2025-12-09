@@ -49,7 +49,7 @@ namespace Coupon
                             html += $"Directory Exists: {Directory.Exists(directory)}\n";
                             if (!Directory.Exists(directory))
                             {
-                                html += "⚠️ Directory does not exist! ErrorLogger should create it.\n";
+                                html += "[Warning] Directory does not exist! ErrorLogger should create it.\n";
                             }
                         }
 
@@ -63,7 +63,7 @@ namespace Coupon
                 }
                 else
                 {
-                    html += "⚠️ LogPath not configured - will use default App_Data/Logs\n";
+                    html += "[Warning] LogPath not configured - will use default App_Data/Logs\n";
                     string defaultPath = Server.MapPath("~/App_Data/Logs");
                     html += $"Default Path: {defaultPath}\n";
                     html += $"Default Path Exists: {Directory.Exists(defaultPath)}\n";
@@ -94,7 +94,7 @@ namespace Coupon
                 ErrorLogger.LogError(testMessage, testException, additionalInfo);
 
                 string logPath = ConfigurationManager.AppSettings["LogPath"];
-                string html = "<div class='result success'><h3>✅ Log Write Successful!</h3><pre>";
+                string html = "<div class='result success'><h3>Log Write Successful!</h3><pre>";
                 html += $"Called: ErrorLogger.LogError()\n";
                 html += $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n";
                 html += $"Message: {testMessage}\n\n";
@@ -111,11 +111,11 @@ namespace Coupon
                             FileInfo fi = new FileInfo(logPath);
                             html += $"File size: {fi.Length} bytes\n";
                             html += $"Last modified: {fi.LastWriteTime}\n";
-                            html += "\n✅ File exists and was written successfully!";
+                            html += "\n[OK] File exists and was written successfully!";
                         }
                         else
                         {
-                            html += "\n⚠️ Log file does not exist yet. Check permissions!";
+                            html += "\n[Warning] Log file does not exist yet. Check permissions!";
                         }
                     }
                     else
@@ -128,11 +128,11 @@ namespace Coupon
                             FileInfo fi = new FileInfo(expectedFile);
                             html += $"File size: {fi.Length} bytes\n";
                             html += $"Last modified: {fi.LastWriteTime}\n";
-                            html += "\n✅ File exists and was written successfully!";
+                            html += "\n[OK] File exists and was written successfully!";
                         }
                         else
                         {
-                            html += "\n⚠️ Log file does not exist yet. Check permissions!";
+                            html += "\n[Warning] Log file does not exist yet. Check permissions!";
                         }
                     }
                 }
@@ -142,7 +142,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                litLogTest.Text = $"<div class='result error'><h3>❌ Error during test:</h3><pre>{ex.Message}\n\n{ex.StackTrace}</pre></div>";
+                litLogTest.Text = $"<div class='result error'><h3>Error during test:</h3><pre>{ex.Message}\n\n{ex.StackTrace}</pre></div>";
             }
         }
 
@@ -180,11 +180,11 @@ namespace Coupon
                 {
                     html += "Creating directory...\n";
                     Directory.CreateDirectory(testPath);
-                    html += "✅ Directory created successfully\n\n";
+                    html += "[OK] Directory created successfully\n\n";
                 }
                 else
                 {
-                    html += "✅ Directory exists\n\n";
+                    html += "[OK] Directory exists\n\n";
                 }
 
                 // Test write permission
@@ -192,17 +192,17 @@ namespace Coupon
                 html += $"Writing test file: {testFile}\n";
 
                 File.WriteAllText(testFile, $"Permission test at {DateTime.Now}");
-                html += "✅ Write successful\n\n";
+                html += "[OK] Write successful\n\n";
 
                 // Read it back
                 string content = File.ReadAllText(testFile);
-                html += "✅ Read successful\n\n";
+                html += "[OK] Read successful\n\n";
 
                 // Delete test file
                 File.Delete(testFile);
-                html += "✅ Delete successful\n\n";
+                html += "[OK] Delete successful\n\n";
 
-                html += "🎉 All permission tests passed!\n";
+                html += "All permission tests passed!\n";
                 html += "The application has full read/write access to this location.\n";
 
                 html += "</pre></div>";
@@ -210,7 +210,7 @@ namespace Coupon
             }
             catch (UnauthorizedAccessException ex)
             {
-                litPermission.Text = $"<div class='result error'><h3>❌ Permission Denied!</h3><pre>" +
+                litPermission.Text = $"<div class='result error'><h3>Permission Denied!</h3><pre>" +
                     $"The IIS application pool identity does not have write access.\n\n" +
                     $"Error: {ex.Message}\n\n" +
                     $"To fix this, run this PowerShell command as Administrator:\n\n" +
@@ -222,7 +222,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                litPermission.Text = $"<div class='result error'><h3>❌ Error:</h3><pre>{ex.Message}\n\n{ex.StackTrace}</pre></div>";
+                litPermission.Text = $"<div class='result error'><h3>Error:</h3><pre>{ex.Message}\n\n{ex.StackTrace}</pre></div>";
             }
         }
 
@@ -257,7 +257,7 @@ namespace Coupon
 
                 if (!File.Exists(fileToRead))
                 {
-                    html += "<pre>⚠️ Log file does not exist yet.\nNo logs have been written today, or the file path is incorrect.</pre></div>";
+                    html += "<pre>[Warning] Log file does not exist yet.\nNo logs have been written today, or the file path is incorrect.</pre></div>";
                     litLogContent.Text = html;
                     return;
                 }
@@ -275,7 +275,7 @@ namespace Coupon
             }
             catch (Exception ex)
             {
-                litLogContent.Text = $"<div class='result error'><h3>❌ Error reading log:</h3><pre>{ex.Message}\n\n{ex.StackTrace}</pre></div>";
+                litLogContent.Text = $"<div class='result error'><h3>Error reading log:</h3><pre>{ex.Message}\n\n{ex.StackTrace}</pre></div>";
             }
         }
     }
