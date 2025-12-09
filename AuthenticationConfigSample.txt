@@ -1,0 +1,73 @@
+# Authentication Configuration Settings for Web.config
+# Add these settings to your <appSettings> section in Web.config
+
+<!-- ================================================================= -->
+<!-- Authentication API Settings -->
+<!-- ================================================================= -->
+<add key="AuthenApiBaseUrl" value="https://your-authen-api.com/api" />
+<add key="AuthenApiTimeout" value="30" />
+
+<!-- ================================================================= -->
+<!-- Cache Settings -->
+<!-- ================================================================= -->
+<add key="CacheDurationDays" value="90" />
+<add key="PasswordSalt" value="YOUR_UNIQUE_SALT_HERE_CHANGE_THIS" />
+
+<!-- ================================================================= -->
+<!-- Security Settings -->
+<!-- ================================================================= -->
+<add key="MaxFailedAttempts" value="5" />
+<add key="LockoutDurationMinutes" value="15" />
+<add key="SessionTimeoutHours" value="8" />
+
+<!-- ================================================================= -->
+<!-- IMPORTANT SECURITY NOTES -->
+<!-- ================================================================= -->
+<!--
+1. CHANGE PasswordSalt:
+   Generate a unique salt for your installation:
+   - Use a password generator or create a random string
+   - Minimum 32 characters recommended
+   - Example: "HondaCX_2024_MyCompany_UniqueKey_789xyz"
+
+2. API URL:
+   - Update AuthenApiBaseUrl with your actual API endpoint
+   - Must use HTTPS in production
+
+3. Cache Duration:
+   - Default 90 days means users can login offline for 90 days
+   - After expiration, system will re-verify with AD
+   - Adjust based on your security policy
+
+4. Session Timeout:
+   - Default 8 hours
+   - Users will be logged out after 8 hours of inactivity
+   - Adjust based on your requirements
+
+5. Lockout Settings:
+   - After 5 failed attempts, account locks for 15 minutes
+   - Protects against brute force attacks
+   - Adjust based on your security policy
+-->
+
+<!-- ================================================================= -->
+<!-- Example Full Web.config <appSettings> Section -->
+<!-- ================================================================= -->
+<!--
+<appSettings>
+  <!-- Existing settings -->
+  <add key="ConnectionString" value="..." />
+  <add key="Path" value="..." />
+
+  <!-- NEW: Authentication Settings -->
+  <add key="AuthenApiBaseUrl" value="https://your-authen-api.com/api" />
+  <add key="AuthenApiTimeout" value="30" />
+  <add key="CacheDurationDays" value="90" />
+  <add key="PasswordSalt" value="HondaCX_2024_MyCompany_UniqueKey_789xyz" />
+  <add key="MaxFailedAttempts" value="5" />
+  <add key="LockoutDurationMinutes" value="15" />
+  <add key="SessionTimeoutHours" value="8" />
+
+  <!-- Other settings... -->
+</appSettings>
+-->

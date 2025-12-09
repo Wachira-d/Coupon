@@ -21,9 +21,33 @@ namespace Coupon.Admin
 
         protected void Page_Load(object sender, EventArgs e)
         {
+            // SECURITY: Check authentication before allowing access
+            if (!AuthenticationHelper.ValidateSession(Session))
+            {
+                // Redirect to login page with return URL
+                string returnUrl = Request.Url.PathAndQuery;
+                Response.Redirect($"~/Admin/Login.aspx?ReturnUrl={Server.UrlEncode(returnUrl)}", false);
+                Context.ApplicationInstance.CompleteRequest();
+                return;
+            }
+
             if (!IsPostBack)
             {
+                // Show user info
+                UserInfo currentUser = AuthenticationHelper.GetCurrentUser(Session);
+                if (currentUser != null)
+                {
+                    // You can display welcome message or user info here if needed
+                    // e.g., lblWelcome.Text = $"Welcome, {currentUser.DisplayName}";
+                }
+
                 LoadDashboardStats();
+
+                // Hide old login controls
+                Panel1.Visible = true;
+                TextBox1.Visible = false;
+                TextBox13.Visible = false;
+                Button1.Visible = false;
             }
         }
 
