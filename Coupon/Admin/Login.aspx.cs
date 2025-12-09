@@ -94,17 +94,14 @@ namespace Coupon.Admin
                         $"Auth Source: {result.AuthSource}"
                     );
 
-                    // Show success message
-                    ShowSuccess($"Welcome, {result.User.DisplayName}! Redirecting...");
-
-                    // Use client-side redirect for reliable navigation after postback
+                    // Redirect to admin page
                     string returnUrl = ViewState["ReturnUrl"]?.ToString();
                     string targetUrl = (!string.IsNullOrEmpty(returnUrl) && IsLocalUrl(returnUrl))
                         ? returnUrl
-                        : ResolveUrl("~/Admin/Report.aspx");
+                        : "~/Admin/Report.aspx";
 
-                    ClientScript.RegisterStartupScript(this.GetType(), "redirect",
-                        $"setTimeout(function(){{ window.location.href = '{targetUrl}'; }}, 1000);", true);
+                    Response.Redirect(targetUrl, false);
+                    Context.ApplicationInstance.CompleteRequest();
                 }
                 else
                 {
