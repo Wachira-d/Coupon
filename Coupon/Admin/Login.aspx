@@ -269,8 +269,7 @@
                 <asp:Button ID="btnLogin" runat="server"
                            Text="Login"
                            CssClass="btn-login"
-                           OnClick="btnLogin_Click"
-                           OnClientClick="return validateForm();" />
+                           OnClick="btnLogin_Click" />
             </div>
 
             <div class="login-footer">
@@ -283,52 +282,13 @@
     </form>
 
     <script type="text/javascript">
-        function validateForm() {
-            var username = document.getElementById('<%= txtUsername.ClientID %>').value.trim();
-            var password = document.getElementById('<%= txtPassword.ClientID %>').value;
-
-            if (username === '') {
-                alert('Please enter your username');
-                document.getElementById('<%= txtUsername.ClientID %>').focus();
-                return false;
-            }
-
-            if (password === '') {
-                alert('Please enter your password');
-                document.getElementById('<%= txtPassword.ClientID %>').focus();
-                return false;
-            }
-
-            // Show loading state AFTER form submission starts
-            // Using setTimeout to delay disabling - otherwise postback is cancelled
-            var btn = document.getElementById('<%= btnLogin.ClientID %>');
-            setTimeout(function() {
-                btn.disabled = true;
-                btn.value = 'Authenticating...';
-            }, 100);
-
-            return true;
-        }
-
         // Auto-focus username field on page load
         window.onload = function () {
-            document.getElementById('<%= txtUsername.ClientID %>').focus();
+            var usernameField = document.getElementById('<%= txtUsername.ClientID %>');
+            if (usernameField) {
+                usernameField.focus();
+            }
         };
-
-        // Enter key to submit
-        document.addEventListener('DOMContentLoaded', function () {
-            var form = document.getElementById('form1');
-            var inputs = form.querySelectorAll('input[type="text"], input[type="password"]');
-
-            inputs.forEach(function (input) {
-                input.addEventListener('keypress', function (e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        document.getElementById('<%= btnLogin.ClientID %>').click();
-                    }
-                });
-            });
-        });
     </script>
 </body>
 </html>
