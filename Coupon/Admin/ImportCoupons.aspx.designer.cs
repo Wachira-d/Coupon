@@ -52,6 +52,11 @@ namespace Coupon.Admin
         protected global::System.Web.UI.WebControls.DropDownList ddlColumnID;
 
         /// <summary>
+        /// chkAutoGenerateID control.
+        /// </summary>
+        protected global::System.Web.UI.WebControls.CheckBox chkAutoGenerateID;
+
+        /// <summary>
         /// ddlColumnCode control.
         /// </summary>
         protected global::System.Web.UI.WebControls.DropDownList ddlColumnCode;
