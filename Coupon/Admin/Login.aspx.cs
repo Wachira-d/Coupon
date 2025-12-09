@@ -97,17 +97,14 @@ namespace Coupon.Admin
                     // Show success message
                     ShowSuccess($"Welcome, {result.User.DisplayName}! Redirecting...");
 
-                    // Redirect after short delay (using client-side redirect)
+                    // Use client-side redirect for reliable navigation after postback
                     string returnUrl = ViewState["ReturnUrl"]?.ToString();
-                    if (!string.IsNullOrEmpty(returnUrl) && IsLocalUrl(returnUrl))
-                    {
-                        ClientScript.RegisterStartupScript(this.GetType(), "redirect",
-                            $"setTimeout(function(){{ window.location = '{returnUrl}'; }}, 1000);", true);
-                    }
-                    else
-                    {
-                        RedirectToAdminPage();
-                    }
+                    string targetUrl = (!string.IsNullOrEmpty(returnUrl) && IsLocalUrl(returnUrl))
+                        ? returnUrl
+                        : ResolveUrl("~/Admin/Report.aspx");
+
+                    ClientScript.RegisterStartupScript(this.GetType(), "redirect",
+                        $"setTimeout(function(){{ window.location.href = '{targetUrl}'; }}, 1000);", true);
                 }
                 else
                 {
@@ -139,6 +136,11 @@ namespace Coupon.Admin
             panelAlert.CssClass = "alert alert-error show";
             litMessage.Text = $"<strong>Error:</strong> {Server.HtmlEncode(message)}";
             panelAlert.Visible = true;
+
+            // Re-enable the login button via JavaScript
+            ClientScript.RegisterStartupScript(this.GetType(), "enableBtn",
+                "document.getElementById('" + btnLogin.ClientID + "').disabled = false; " +
+                "document.getElementById('" + btnLogin.ClientID + "').innerHTML = 'Login';", true);
         }
 
         private void ShowSuccess(string message)
