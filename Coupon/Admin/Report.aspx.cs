@@ -80,7 +80,7 @@ namespace Coupon.Admin
                 {
                     try
                     {
-                        string expireDateStr = row[_dbHelper.GetColumnName("Expire_DateTime")]?.ToString();
+                        string expireDateStr = row[_dbHelper.GetDataRowColumnName("Expire_DateTime")]?.ToString();
                         if (!string.IsNullOrEmpty(expireDateStr) && DateTime.TryParse(expireDateStr, out DateTime expireDate))
                         {
                             if (expireDate < DateTime.Now)

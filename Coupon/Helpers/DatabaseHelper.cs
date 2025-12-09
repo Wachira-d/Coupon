@@ -67,6 +67,18 @@ namespace Coupon.Helpers
         }
 
         /// <summary>
+        /// Get column name for DataRow access (without SQL brackets)
+        /// </summary>
+        public string GetDataRowColumnName(string columnName)
+        {
+            if (_databaseType == "postgresql")
+            {
+                return columnName.ToLower();
+            }
+            return columnName;
+        }
+
+        /// <summary>
         /// Get boolean value formatted for the database type
         /// </summary>
         public string GetBooleanValue(bool value)
