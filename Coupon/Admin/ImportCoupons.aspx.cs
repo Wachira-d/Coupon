@@ -1,4 +1,5 @@
 using System;
+using System.Configuration;
 using System.Data;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,11 @@ namespace Coupon.Admin
         private const string SESSION_DATATABLE = "ImportCoupons_DataTable";
         private const string SESSION_FILENAME = "ImportCoupons_FileName";
         private const int MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+        // Random ID generation (matching old ImportCode application)
+        private static readonly Random _random = new Random();
+        private static readonly string ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        private static readonly int SHORT_URL_DIGIT = int.Parse(ConfigurationManager.AppSettings["ShortUrlDigit"] ?? "8");
 
         protected void Page_Load(object sender, EventArgs e)
         {
@@ -437,10 +443,13 @@ namespace Coupon.Admin
         {
             try
             {
+                // Check if auto-generate ID is enabled
+                bool autoGenerateId = chkAutoGenerateID.Checked;
+
                 // Validate inputs
-                if (string.IsNullOrEmpty(ddlColumnID.SelectedValue))
+                if (!autoGenerateId && string.IsNullOrEmpty(ddlColumnID.SelectedValue))
                 {
-                    ShowError("Please select the Coupon ID column");
+                    ShowError("Please select the Coupon ID column or enable Auto-generate ID");
                     return;
                 }
 
@@ -470,7 +479,7 @@ namespace Coupon.Admin
                     return;
                 }
 
-                string columnID = ddlColumnID.SelectedValue;
+                string columnID = autoGenerateId ? null : ddlColumnID.SelectedValue;
                 string columnCode = ddlColumnCode.SelectedValue;
                 string value = txtValue.Text.Trim();
                 DateTime expireDate = DateTime.Parse(txtExpireDate.Text);
@@ -486,44 +495,66 @@ namespace Coupon.Admin
                 {
                     try
                     {
-                        string couponID = row[columnID]?.ToString().Trim();
+                        string couponID;
                         string barcodeCode = row[columnCode]?.ToString().Trim();
 
-                        // Validate
-                        if (string.IsNullOrEmpty(couponID) || string.IsNullOrEmpty(barcodeCode))
+                        // Generate or get ID from CSV
+                        if (autoGenerateId)
+                        {
+                            // Auto-generate unique ID (matching old ImportCode logic)
+                            couponID = GenerateUniqueId();
+                        }
+                        else
+                        {
+                            couponID = row[columnID]?.ToString().Trim();
+                        }
+
+                        // Validate barcode
+                        if (string.IsNullOrEmpty(barcodeCode))
                         {
                             errorCount++;
                             continue;
                         }
 
-                        // Check if coupon already exists
-                        string checkQuery = $"SELECT COUNT(*) FROM {_dbHelper.GetTableName("Coupon")} WHERE {_dbHelper.GetColumnName("ID")} = @id";
-                        var checkParam = _dbHelper.CreateParameter("@id", couponID);
-                        int exists = Convert.ToInt32(_dbHelper.ExecuteScalar(checkQuery, checkParam));
-
-                        if (exists > 0)
+                        // Validate ID (only for non-auto-generated)
+                        if (!autoGenerateId && string.IsNullOrEmpty(couponID))
                         {
-                            duplicateCount++;
+                            errorCount++;
                             continue;
                         }
 
-                        // Insert into database
+                        // Check if coupon already exists (skip for auto-generated IDs since they are already unique)
+                        if (!autoGenerateId)
+                        {
+                            string checkQuery = $"SELECT COUNT(*) FROM {_dbHelper.GetTableName("Coupon")} WHERE {_dbHelper.GetColumnName("ID")} = @id";
+                            var checkParam = _dbHelper.CreateParameter("@id", couponID);
+                            int exists = Convert.ToInt32(_dbHelper.ExecuteScalar(checkQuery, checkParam));
+
+                            if (exists > 0)
+                            {
+                                duplicateCount++;
+                                continue;
+                            }
+                        }
+
+                        // Insert into database (matching old ImportCode format)
                         string insertQuery = $@"INSERT INTO {_dbHelper.GetTableName("Coupon")}
                             ({_dbHelper.GetColumnName("ID")},
                              {_dbHelper.GetColumnName("Code")},
-                             {_dbHelper.GetColumnName("Value")},
+                             {_dbHelper.GetColumnName("Date_DataIn")},
                              {_dbHelper.GetColumnName("Expire_DateTime")},
-                             {_dbHelper.GetColumnName("Used_Status")},
-                             {_dbHelper.GetColumnName("Date_Use")})
+                             {_dbHelper.GetColumnName("Value")},
+                             {_dbHelper.GetColumnName("Used_Status")})
                             VALUES
-                            (@id, @code, @value, @expireDate, @usedStatus, NULL)";
+                            (@id, @code, @dateDataIn, @expireDate, @value, @usedStatus)";
 
                         var parameters = new[]
                         {
                             _dbHelper.CreateParameter("@id", couponID),
                             _dbHelper.CreateParameter("@code", barcodeCode),
-                            _dbHelper.CreateParameter("@value", value),
+                            _dbHelper.CreateParameter("@dateDataIn", DateTime.Now.ToString("yyyy-MM-dd HH:mm")),
                             _dbHelper.CreateParameter("@expireDate", expireDate.ToString("yyyy-MM-dd HH:mm:ss")),
+                            _dbHelper.CreateParameter("@value", value),
                             _dbHelper.CreateParameter("@usedStatus", _dbHelper.GetBooleanValue(false))
                         };
 
@@ -534,8 +565,9 @@ namespace Coupon.Admin
                     {
                         errorCount++;
                         errors.AppendLine($"Row error: {rowEx.Message}");
+                        string idInfo = autoGenerateId ? "Auto-generated" : (columnID != null ? row[columnID]?.ToString() : "N/A");
                         ErrorLogger.LogError("Error importing coupon row", rowEx,
-                            $"ID: {row[columnID]}, Code: {row[columnCode]}");
+                            $"ID: {idInfo}, Code: {row[columnCode]}");
                     }
                 }
 
@@ -640,5 +672,61 @@ namespace Coupon.Admin
             ClientScript.RegisterStartupScript(this.GetType(), "error",
                 $"alert('{message.Replace("'", "\\'")}');", true);
         }
+
+        #region ID Generation (from old ImportCode application)
+
+        /// <summary>
+        /// Handle auto-generate ID checkbox change
+        /// </summary>
+        protected void chkAutoGenerateID_CheckedChanged(object sender, EventArgs e)
+        {
+            ddlColumnID.Enabled = !chkAutoGenerateID.Checked;
+            if (chkAutoGenerateID.Checked)
+            {
+                ddlColumnID.SelectedIndex = 0;
+            }
+        }
+
+        /// <summary>
+        /// Generate a random alphanumeric string (matching old ImportCode logic)
+        /// </summary>
+        private static string RandomString(int length)
+        {
+            return new string(Enumerable.Repeat(ID_CHARS, length)
+                .Select(s => s[_random.Next(s.Length)]).ToArray());
+        }
+
+        /// <summary>
+        /// Generate a unique coupon ID that doesn't exist in the database
+        /// </summary>
+        private string GenerateUniqueId()
+        {
+            const int maxAttempts = 100;
+            int attempts = 0;
+
+            while (attempts < maxAttempts)
+            {
+                string id = RandomString(SHORT_URL_DIGIT);
+
+                // Check if ID already exists in database
+                string checkQuery = $"SELECT COUNT(*) FROM {_dbHelper.GetTableName("Coupon")} WHERE {_dbHelper.GetColumnName("ID")} = @id";
+                var checkParam = _dbHelper.CreateParameter("@id", id);
+                int exists = Convert.ToInt32(_dbHelper.ExecuteScalar(checkQuery, checkParam));
+
+                if (exists == 0)
+                {
+                    return id;
+                }
+
+                attempts++;
+            }
+
+            // Fallback: use GUID-based ID if random generation keeps colliding
+            ErrorLogger.LogWarning("GenerateUniqueId: Max attempts reached, using GUID fallback",
+                $"Attempts: {maxAttempts}");
+            return Guid.NewGuid().ToString("N").Substring(0, SHORT_URL_DIGIT);
+        }
+
+        #endregion
     }
 }

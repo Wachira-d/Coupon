@@ -337,7 +337,13 @@
                             <div class="map-item">
                                 <div class="map-label">Coupon ID Column:</div>
                                 <div class="map-arrow">→</div>
-                                <asp:DropDownList ID="ddlColumnID" runat="server" CssClass="form-control map-select" />
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <asp:DropDownList ID="ddlColumnID" runat="server" CssClass="form-control map-select" />
+                                    <div style="white-space: nowrap;">
+                                        <asp:CheckBox ID="chkAutoGenerateID" runat="server" AutoPostBack="true" OnCheckedChanged="chkAutoGenerateID_CheckedChanged" />
+                                        <label for="<%= chkAutoGenerateID.ClientID %>" style="margin-left: 5px; cursor: pointer;">Auto-generate ID</label>
+                                    </div>
+                                </div>
                             </div>
                             <div class="map-item">
                                 <div class="map-label">Barcode Column:</div>
@@ -356,11 +362,11 @@
 
                         <div class="lot-settings">
                             <div class="form-group">
-                                <label>💰 Coupon Value (บาท):</label>
+                                <label>Coupon Value (Baht):</label>
                                 <asp:TextBox ID="txtValue" runat="server" CssClass="form-control" placeholder="e.g., 200, 300, 500" TextMode="Number" />
                             </div>
                             <div class="form-group">
-                                <label>📅 Expiration Date:</label>
+                                <label>Expiration Date:</label>
                                 <asp:TextBox ID="txtExpireDate" runat="server" CssClass="form-control" TextMode="Date" />
                             </div>
                         </div>
