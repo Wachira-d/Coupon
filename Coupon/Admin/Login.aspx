@@ -310,14 +310,16 @@
                 return true; // Let server-side validation handle it
             }
 
-            // Show loading overlay
+            // Show loading overlay immediately
             var overlay = document.getElementById('loadingOverlay');
             overlay.style.display = 'flex';
 
-            // Disable login button
-            var btn = document.getElementById('<%= btnLogin.ClientID %>');
-            btn.disabled = true;
-            btn.value = 'Logging in...';
+            // Disable button AFTER form starts submitting (use setTimeout)
+            setTimeout(function() {
+                var btn = document.getElementById('<%= btnLogin.ClientID %>');
+                btn.disabled = true;
+                btn.value = 'Logging in...';
+            }, 100);
 
             return true; // Allow form submission
         }
