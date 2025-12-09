@@ -21,6 +21,7 @@ namespace Coupon.Helpers
 
         // Configuration
         private static readonly string API_BASE_URL = ConfigurationManager.AppSettings["AuthenApiBaseUrl"] ?? "https://authen-api.com/api";
+        private static readonly string API_KEY = ConfigurationManager.AppSettings["AuthenApiKey"] ?? "";
         private static readonly int API_TIMEOUT_SECONDS = int.Parse(ConfigurationManager.AppSettings["AuthenApiTimeout"] ?? "30");
         private static readonly int CACHE_DURATION_DAYS = int.Parse(ConfigurationManager.AppSettings["CacheDurationDays"] ?? "90");
         private static readonly string PASSWORD_SALT = ConfigurationManager.AppSettings["PasswordSalt"] ?? "HondaCX_2024_Salt";
@@ -207,7 +208,19 @@ namespace Coupon.Helpers
                 string json = JsonConvert.SerializeObject(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = _httpClient.PostAsync("/ldap/authenticate", content).Result;
+                // Create request with API Key header
+                var request = new HttpRequestMessage(HttpMethod.Post, "/ldap/authenticate")
+                {
+                    Content = content
+                };
+
+                // Add X-API-Key header if configured
+                if (!string.IsNullOrEmpty(API_KEY))
+                {
+                    request.Headers.Add("X-API-Key", API_KEY);
+                }
+
+                var response = _httpClient.SendAsync(request).Result;
                 string responseBody = response.Content.ReadAsStringAsync().Result;
 
                 var apiResult = JsonConvert.DeserializeObject<JObject>(responseBody);
