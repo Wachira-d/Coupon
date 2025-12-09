@@ -121,32 +121,39 @@
         }
 
         .form-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            display: flex;
+            flex-wrap: wrap;
             gap: 20px;
             margin-bottom: 20px;
         }
 
         .form-group {
-            display: flex;
-            flex-direction: column;
+            flex: 1;
+            min-width: 280px;
+            display: block;
         }
 
         .form-group label {
+            display: block;
             font-weight: 600;
             color: #555;
             margin-bottom: 8px;
             font-size: 14px;
+            text-align: left;
         }
 
         .form-group input[type="text"],
         .form-group input[type="date"],
-        .form-group select {
+        .form-group select,
+        .form-group .form-control {
+            display: block;
+            width: 100%;
             padding: 10px 15px;
             border: 1px solid #ddd;
             border-radius: 8px;
             font-size: 14px;
             transition: border-color 0.3s;
+            box-sizing: border-box;
         }
 
         .form-group input:focus,
@@ -360,8 +367,8 @@
                 <p><asp:Label ID="lblCurrentEmail" runat="server" /></p>
             </div>
             <div class="nav-buttons">
-                <a href="/Admin/ImportCoupons.aspx">Import Coupons</a>
-                <a href="/Admin/Logout.aspx">Logout</a>
+                <a href="<%= ResolveUrl("~/Admin/ImportCoupons.aspx") %>">Import Coupons</a>
+                <a href="<%= ResolveUrl("~/Admin/Logout.aspx") %>">Logout</a>
             </div>
         </div>
 

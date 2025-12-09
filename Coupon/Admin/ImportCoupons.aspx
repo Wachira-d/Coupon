@@ -291,8 +291,8 @@
                     <span style="margin-left: 15px;"><asp:Label ID="lblCurrentEmail" runat="server" /></span>
                 </div>
                 <div>
-                    <a href="/Admin/Report.aspx" style="color: #667eea; text-decoration: none; padding: 6px 12px; background: white; border: 1px solid #667eea; border-radius: 5px; margin-right: 8px; display: inline-block; font-size: 14px;">Report</a>
-                    <a href="/Admin/Logout.aspx" style="color: white; text-decoration: none; padding: 6px 12px; background: #667eea; border-radius: 5px; display: inline-block; font-size: 14px;">Logout</a>
+                    <a href="<%= ResolveUrl("~/Admin/Report.aspx") %>" style="color: #667eea; text-decoration: none; padding: 6px 12px; background: white; border: 1px solid #667eea; border-radius: 5px; margin-right: 8px; display: inline-block; font-size: 14px;">Report</a>
+                    <a href="<%= ResolveUrl("~/Admin/Logout.aspx") %>" style="color: white; text-decoration: none; padding: 6px 12px; background: #667eea; border-radius: 5px; display: inline-block; font-size: 14px;">Logout</a>
                 </div>
             </div>
 
