@@ -280,27 +280,30 @@ namespace Coupon.Helpers
 
             try
             {
-                // Check database connection string
-                string connString = GetConnectionString();
+                // Check database connection string (without logging to avoid circular dependency)
+                string databaseType = ConfigurationManager.AppSettings["DatabaseType"]?.ToLower() ?? "mssql";
+                string key = databaseType == "postgresql" ? "PostgreSQLConnectionString" : "MSSQLConnectionString";
+                string connString = ConfigurationManager.AppSettings[key];
+
                 if (string.IsNullOrEmpty(connString))
                 {
                     result.Errors.Add("Database connection string is missing");
                 }
-                else if (connString.Contains("Password=") && Environment.GetEnvironmentVariable("DB_CONNECTION_POSTGRESQL") == null)
+                else if (connString.Contains("Password="))
                 {
                     result.Warnings.Add("Database credentials are hardcoded in Web.config. Consider using environment variables.");
                 }
 
                 // Check LDAP server
-                string ldap = GetLdapServer();
+                string ldap = ConfigurationManager.AppSettings["LDAP"];
                 if (string.IsNullOrEmpty(ldap))
                 {
                     result.Warnings.Add("LDAP server is not configured");
                 }
 
                 // Check authorized emails
-                var emails = GetAuthorizedEmails();
-                if (emails.Length == 0)
+                string emailList = ConfigurationManager.AppSettings["ReportPassword"];
+                if (string.IsNullOrEmpty(emailList))
                 {
                     result.Warnings.Add("No authorized admin emails configured");
                 }
@@ -312,6 +315,27 @@ namespace Coupon.Helpers
                     result.Warnings.Add($"Barcode path does not exist: {barcodePath}");
                 }
 
+                // Check log path
+                string logPath = GetLogPath();
+                if (!Directory.Exists(logPath))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(logPath);
+                    }
+                    catch
+                    {
+                        result.Warnings.Add($"Cannot create log path: {logPath}");
+                    }
+                }
+
+                // Validate password salt is changed from default
+                string salt = ConfigurationManager.AppSettings["PasswordSalt"] ?? "";
+                if (string.IsNullOrEmpty(salt) || salt.Contains("CHANGE_THIS"))
+                {
+                    result.Warnings.Add("Password salt is using default value - change this for security!");
+                }
+
                 result.IsValid = result.Errors.Count == 0;
             }
             catch (Exception ex)
@@ -321,6 +345,123 @@ namespace Coupon.Helpers
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Test database connection with timeout (safe for startup)
+        /// </summary>
+        public static bool TestDatabaseConnection(int timeoutSeconds = 5)
+        {
+            try
+            {
+                string databaseType = ConfigurationManager.AppSettings["DatabaseType"]?.ToLower() ?? "mssql";
+                string connectionString;
+
+                if (databaseType == "postgresql")
+                {
+                    connectionString = ConfigurationManager.AppSettings["PostgreSQLConnectionString"];
+                }
+                else
+                {
+                    connectionString = ConfigurationManager.AppSettings["MSSQLConnectionString"];
+                }
+
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    return false;
+                }
+
+                // Add or modify connection timeout
+                if (databaseType == "postgresql")
+                {
+                    if (!connectionString.Contains("Timeout="))
+                    {
+                        connectionString += $";Timeout={timeoutSeconds}";
+                    }
+
+                    using (var conn = new Npgsql.NpgsqlConnection(connectionString))
+                    {
+                        conn.Open();
+                        using (var cmd = new Npgsql.NpgsqlCommand("SELECT 1", conn))
+                        {
+                            cmd.CommandTimeout = timeoutSeconds;
+                            cmd.ExecuteScalar();
+                        }
+                        return true;
+                    }
+                }
+                else
+                {
+                    // MSSQL
+                    if (!connectionString.Contains("Connection Timeout="))
+                    {
+                        connectionString += $";Connection Timeout={timeoutSeconds}";
+                    }
+
+                    using (var conn = new System.Data.SqlClient.SqlConnection(connectionString))
+                    {
+                        conn.Open();
+                        using (var cmd = new System.Data.SqlClient.SqlCommand("SELECT 1", conn))
+                        {
+                            cmd.CommandTimeout = timeoutSeconds;
+                            cmd.ExecuteScalar();
+                        }
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // Database connection failed
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Get application health status
+        /// </summary>
+        public static HealthCheckResult GetHealthStatus()
+        {
+            var result = new HealthCheckResult();
+
+            // Check configuration
+            var configResult = ValidateConfiguration();
+            result.ConfigurationValid = configResult.IsValid;
+            result.ConfigurationWarnings = configResult.Warnings.Count;
+
+            // Check database
+            result.DatabaseConnected = TestDatabaseConnection(timeoutSeconds: 3);
+
+            // Check paths
+            result.BarcodePathExists = Directory.Exists(GetBarcodePath());
+            result.LogPathExists = Directory.Exists(GetLogPath());
+
+            // Overall health
+            result.IsHealthy = result.ConfigurationValid && result.DatabaseConnected;
+
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Health check result
+    /// </summary>
+    public class HealthCheckResult
+    {
+        public bool IsHealthy { get; set; }
+        public bool ConfigurationValid { get; set; }
+        public int ConfigurationWarnings { get; set; }
+        public bool DatabaseConnected { get; set; }
+        public bool BarcodePathExists { get; set; }
+        public bool LogPathExists { get; set; }
+
+        public override string ToString()
+        {
+            return $"Health: {(IsHealthy ? "OK" : "DEGRADED")}, " +
+                   $"Config: {(ConfigurationValid ? "OK" : "ERROR")} ({ConfigurationWarnings} warnings), " +
+                   $"Database: {(DatabaseConnected ? "Connected" : "Disconnected")}, " +
+                   $"BarcodePath: {(BarcodePathExists ? "OK" : "Missing")}, " +
+                   $"LogPath: {(LogPathExists ? "OK" : "Missing")}";
         }
     }
 

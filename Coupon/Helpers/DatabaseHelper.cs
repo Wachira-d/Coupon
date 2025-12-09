@@ -3,17 +3,22 @@ using System.Configuration;
 using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
+using System.Threading;
 using Npgsql;
 
 namespace Coupon.Helpers
 {
     /// <summary>
     /// Secure database helper with parameterized queries to prevent SQL injection
+    /// Includes retry logic for transient errors and connection health checks
     /// </summary>
     public class DatabaseHelper
     {
         private readonly string _databaseType;
         private readonly string _connectionString;
+        private const int MAX_RETRIES = 3;
+        private const int RETRY_DELAY_MS = 500;
+        private const int COMMAND_TIMEOUT = 30;
 
         public DatabaseHelper()
         {
@@ -30,6 +35,11 @@ namespace Coupon.Helpers
         }
 
         public string DatabaseType => _databaseType;
+
+        /// <summary>
+        /// Check if connection string is configured
+        /// </summary>
+        public bool IsConfigured => !string.IsNullOrEmpty(_connectionString);
 
         /// <summary>
         /// Get table name with proper formatting for the database type
@@ -69,21 +79,106 @@ namespace Coupon.Helpers
         }
 
         /// <summary>
+        /// Check if exception is a transient error that should be retried
+        /// </summary>
+        private bool IsTransientError(Exception ex)
+        {
+            // SQL Server transient error numbers
+            if (ex is SqlException sqlEx)
+            {
+                int[] transientErrors = { -2, 20, 64, 233, 10053, 10054, 10060, 40197, 40501, 40613, 49918, 49919, 49920 };
+                foreach (int errorNumber in transientErrors)
+                {
+                    if (sqlEx.Number == errorNumber)
+                        return true;
+                }
+            }
+
+            // PostgreSQL transient errors
+            if (ex is NpgsqlException npgEx)
+            {
+                // Connection-related errors
+                if (ex.Message.Contains("connection") ||
+                    ex.Message.Contains("timeout") ||
+                    ex.Message.Contains("broken"))
+                {
+                    return true;
+                }
+            }
+
+            // Timeout exceptions
+            if (ex is TimeoutException)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Execute with retry logic for transient errors
+        /// </summary>
+        private T ExecuteWithRetry<T>(Func<T> operation, string operationName, string query)
+        {
+            int retryCount = 0;
+            Exception lastException = null;
+
+            while (retryCount < MAX_RETRIES)
+            {
+                try
+                {
+                    return operation();
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+
+                    if (IsTransientError(ex) && retryCount < MAX_RETRIES - 1)
+                    {
+                        retryCount++;
+                        // Log retry attempt (file only to avoid recursive DB calls)
+                        try
+                        {
+                            ErrorLogger.LogToFileOnly($"Database retry attempt {retryCount}/{MAX_RETRIES}", ex,
+                                $"Operation: {operationName}");
+                        }
+                        catch { }
+
+                        // Exponential backoff
+                        Thread.Sleep(RETRY_DELAY_MS * retryCount);
+                    }
+                    else
+                    {
+                        // Non-transient error or max retries reached
+                        try
+                        {
+                            ErrorLogger.LogError($"Database {operationName} Error", ex, query);
+                        }
+                        catch { }
+                        throw;
+                    }
+                }
+            }
+
+            // Should not reach here, but throw last exception if it does
+            throw lastException ?? new Exception($"Database operation {operationName} failed");
+        }
+
+        /// <summary>
         /// Execute a parameterized query and return results
         /// SECURITY: Uses parameterized queries to prevent SQL injection
         /// </summary>
         public DataTable ExecuteQuery(string query, params DbParameter[] parameters)
         {
-            DataTable dt = new DataTable();
-
-            try
+            return ExecuteWithRetry(() =>
             {
+                DataTable dt = new DataTable();
+
                 if (_databaseType == "postgresql")
                 {
                     using (NpgsqlConnection con = new NpgsqlConnection(_connectionString))
                     {
                         using (NpgsqlCommand cmd = new NpgsqlCommand(query, con))
                         {
+                            cmd.CommandTimeout = COMMAND_TIMEOUT;
                             if (parameters != null)
                             {
                                 foreach (var param in parameters)
@@ -103,6 +198,7 @@ namespace Coupon.Helpers
                     {
                         using (SqlCommand cmd = new SqlCommand(query, con))
                         {
+                            cmd.CommandTimeout = COMMAND_TIMEOUT;
                             if (parameters != null)
                             {
                                 foreach (var param in parameters)
@@ -116,14 +212,9 @@ namespace Coupon.Helpers
                         }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                ErrorLogger.LogError("Database Query Error", ex, query);
-                throw;
-            }
 
-            return dt;
+                return dt;
+            }, "Query", query);
         }
 
         /// <summary>
@@ -132,9 +223,7 @@ namespace Coupon.Helpers
         /// </summary>
         public object ExecuteScalar(string query, params DbParameter[] parameters)
         {
-            object result = null;
-
-            try
+            return ExecuteWithRetry(() =>
             {
                 if (_databaseType == "postgresql")
                 {
@@ -142,6 +231,7 @@ namespace Coupon.Helpers
                     {
                         using (NpgsqlCommand command = new NpgsqlCommand(query, connection))
                         {
+                            command.CommandTimeout = COMMAND_TIMEOUT;
                             if (parameters != null)
                             {
                                 foreach (var param in parameters)
@@ -151,7 +241,7 @@ namespace Coupon.Helpers
                             }
 
                             connection.Open();
-                            result = command.ExecuteScalar();
+                            return command.ExecuteScalar();
                         }
                     }
                 }
@@ -161,6 +251,7 @@ namespace Coupon.Helpers
                     {
                         using (SqlCommand command = new SqlCommand(query, connection))
                         {
+                            command.CommandTimeout = COMMAND_TIMEOUT;
                             if (parameters != null)
                             {
                                 foreach (var param in parameters)
@@ -170,18 +261,11 @@ namespace Coupon.Helpers
                             }
 
                             connection.Open();
-                            result = command.ExecuteScalar();
+                            return command.ExecuteScalar();
                         }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                ErrorLogger.LogError("Database Scalar Query Error", ex, query);
-                throw;
-            }
-
-            return result;
+            }, "Scalar", query);
         }
 
         /// <summary>
@@ -190,9 +274,7 @@ namespace Coupon.Helpers
         /// </summary>
         public int ExecuteNonQuery(string query, params DbParameter[] parameters)
         {
-            int rowsAffected = 0;
-
-            try
+            return ExecuteWithRetry(() =>
             {
                 if (_databaseType == "postgresql")
                 {
@@ -200,6 +282,7 @@ namespace Coupon.Helpers
                     {
                         using (NpgsqlCommand command = new NpgsqlCommand(query, connection))
                         {
+                            command.CommandTimeout = COMMAND_TIMEOUT;
                             if (parameters != null)
                             {
                                 foreach (var param in parameters)
@@ -209,7 +292,7 @@ namespace Coupon.Helpers
                             }
 
                             connection.Open();
-                            rowsAffected = command.ExecuteNonQuery();
+                            return command.ExecuteNonQuery();
                         }
                     }
                 }
@@ -219,6 +302,7 @@ namespace Coupon.Helpers
                     {
                         using (SqlCommand command = new SqlCommand(query, connection))
                         {
+                            command.CommandTimeout = COMMAND_TIMEOUT;
                             if (parameters != null)
                             {
                                 foreach (var param in parameters)
@@ -228,18 +312,54 @@ namespace Coupon.Helpers
                             }
 
                             connection.Open();
-                            rowsAffected = command.ExecuteNonQuery();
+                            return command.ExecuteNonQuery();
                         }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                ErrorLogger.LogError("Database NonQuery Error", ex, query);
-                throw;
-            }
+            }, "NonQuery", query);
+        }
 
-            return rowsAffected;
+        /// <summary>
+        /// Test database connection
+        /// </summary>
+        public bool TestConnection(int timeoutSeconds = 5)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_connectionString))
+                    return false;
+
+                if (_databaseType == "postgresql")
+                {
+                    using (var conn = new NpgsqlConnection(_connectionString))
+                    {
+                        conn.Open();
+                        using (var cmd = new NpgsqlCommand("SELECT 1", conn))
+                        {
+                            cmd.CommandTimeout = timeoutSeconds;
+                            cmd.ExecuteScalar();
+                        }
+                        return true;
+                    }
+                }
+                else
+                {
+                    using (var conn = new SqlConnection(_connectionString))
+                    {
+                        conn.Open();
+                        using (var cmd = new SqlCommand("SELECT 1", conn))
+                        {
+                            cmd.CommandTimeout = timeoutSeconds;
+                            cmd.ExecuteScalar();
+                        }
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>

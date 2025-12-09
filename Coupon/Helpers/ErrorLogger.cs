@@ -1,19 +1,51 @@
 using System;
 using System.Configuration;
 using System.IO;
+using System.Threading;
 using System.Web;
 
 namespace Coupon.Helpers
 {
     /// <summary>
-    /// Error logging utility to replace empty catch blocks
+    /// Error logging utility with failsafe mechanisms
     /// Logs to both file and database for redundancy
+    /// File logging is always attempted first to prevent circular dependencies
     /// </summary>
     public static class ErrorLogger
     {
         private static readonly string LogPath = GetLogPath();
         private static readonly bool UseFixedLogFile = IsFixedLogFile();
-        private static readonly DatabaseHelper _dbHelper = new DatabaseHelper();
+        private static readonly object _fileLock = new object();
+        private static DatabaseHelper _dbHelper = null;
+        private static bool _dbInitialized = false;
+        private static bool _dbAvailable = true;
+        private static readonly object _dbLock = new object();
+
+        /// <summary>
+        /// Lazy initialization of database helper to prevent startup issues
+        /// </summary>
+        private static DatabaseHelper GetDatabaseHelper()
+        {
+            if (!_dbAvailable) return null;
+
+            lock (_dbLock)
+            {
+                if (!_dbInitialized)
+                {
+                    try
+                    {
+                        _dbHelper = new DatabaseHelper();
+                        _dbInitialized = true;
+                    }
+                    catch
+                    {
+                        _dbAvailable = false;
+                        return null;
+                    }
+                }
+                return _dbHelper;
+            }
+        }
 
         private static string GetLogPath()
         {
@@ -24,7 +56,7 @@ namespace Coupon.Helpers
                 {
                     // Default to App_Data folder
                     path = HttpContext.Current?.Server.MapPath("~/App_Data/Logs") ??
-                           Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
+                           Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "App_Data", "Logs");
                 }
 
                 // Check if LogPath is a file path (has extension like .txt, .log)
@@ -52,7 +84,16 @@ namespace Coupon.Helpers
             catch
             {
                 // Fallback to temp directory if all else fails
-                return Path.GetTempPath();
+                string tempPath = Path.Combine(Path.GetTempPath(), "CouponLogs");
+                try
+                {
+                    if (!Directory.Exists(tempPath))
+                    {
+                        Directory.CreateDirectory(tempPath);
+                    }
+                }
+                catch { }
+                return tempPath;
             }
         }
 
@@ -72,47 +113,147 @@ namespace Coupon.Helpers
         }
 
         /// <summary>
-        /// Write log to database
-        /// IMPORTANT: This method should never throw exceptions to prevent logging failures from breaking the application
+        /// Log to file only - use this during startup or when database may not be available
+        /// This method NEVER throws exceptions
         /// </summary>
-        private static void LogToDatabase(string logLevel, string message, Exception ex = null, string additionalInfo = null)
+        public static void LogToFileOnly(string message, Exception ex = null, string additionalInfo = null)
         {
             try
             {
+                WriteToFile("INFO", message, ex, additionalInfo);
+            }
+            catch
+            {
+                // Complete failure - silently fail
+            }
+        }
+
+        /// <summary>
+        /// Write log message to file (thread-safe)
+        /// </summary>
+        private static void WriteToFile(string level, string message, Exception ex = null, string additionalInfo = null)
+        {
+            try
+            {
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                string logFilePath;
+
+                if (UseFixedLogFile)
+                {
+                    logFilePath = LogPath;
+                }
+                else
+                {
+                    string logFileName = $"App_{DateTime.Now:yyyyMMdd}.log";
+                    logFilePath = Path.Combine(LogPath, logFileName);
+                }
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine($"[{timestamp}] [{level}] {message}");
+
+                if (ex != null)
+                {
+                    sb.AppendLine($"  Exception Type: {ex.GetType().Name}");
+                    sb.AppendLine($"  Message: {ex.Message}");
+                    if (!string.IsNullOrEmpty(ex.StackTrace))
+                    {
+                        sb.AppendLine($"  Stack Trace: {ex.StackTrace}");
+                    }
+                    if (ex.InnerException != null)
+                    {
+                        sb.AppendLine($"  Inner Exception: {ex.InnerException.Message}");
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(additionalInfo))
+                {
+                    sb.AppendLine($"  Additional Info: {additionalInfo}");
+                }
+
+                // Add request context if available
+                try
+                {
+                    if (HttpContext.Current != null)
+                    {
+                        sb.AppendLine($"  URL: {HttpContext.Current.Request.Url}");
+                        sb.AppendLine($"  User IP: {HttpContext.Current.Request.UserHostAddress}");
+                    }
+                }
+                catch { }
+
+                sb.AppendLine(new string('-', 80));
+
+                // Thread-safe file write with retry
+                lock (_fileLock)
+                {
+                    int retries = 3;
+                    while (retries > 0)
+                    {
+                        try
+                        {
+                            File.AppendAllText(logFilePath, sb.ToString());
+                            break;
+                        }
+                        catch (IOException)
+                        {
+                            retries--;
+                            if (retries > 0)
+                            {
+                                Thread.Sleep(50);
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Complete failure - silently fail
+            }
+        }
+
+        /// <summary>
+        /// Write log to database (non-blocking)
+        /// </summary>
+        private static void LogToDatabase(string logLevel, string message, Exception ex = null, string additionalInfo = null)
+        {
+            if (!_dbAvailable) return;
+
+            try
+            {
+                var dbHelper = GetDatabaseHelper();
+                if (dbHelper == null) return;
+
                 string requestUrl = null;
                 string userIP = null;
                 string userAgent = null;
 
                 // Collect request context if available
-                if (HttpContext.Current != null)
+                try
                 {
-                    try
+                    if (HttpContext.Current != null)
                     {
                         requestUrl = HttpContext.Current.Request.Url?.ToString();
                         userIP = HttpContext.Current.Request.UserHostAddress;
                         userAgent = HttpContext.Current.Request.UserAgent;
                     }
-                    catch
-                    {
-                        // Ignore if request context is not available
-                    }
                 }
+                catch { }
 
                 // Prepare insert query
-                string query = $@"INSERT INTO {_dbHelper.GetTableName("ErrorLogs")}
-                    ({_dbHelper.GetColumnName("LogLevel")},
-                     {_dbHelper.GetColumnName("Message")},
-                     {_dbHelper.GetColumnName("ExceptionType")},
-                     {_dbHelper.GetColumnName("ExceptionMessage")},
-                     {_dbHelper.GetColumnName("StackTrace")},
-                     {_dbHelper.GetColumnName("InnerException")},
-                     {_dbHelper.GetColumnName("AdditionalInfo")},
-                     {_dbHelper.GetColumnName("RequestUrl")},
-                     {_dbHelper.GetColumnName("UserIP")},
-                     {_dbHelper.GetColumnName("UserAgent")},
-                     {_dbHelper.GetColumnName("CreatedDateTime")},
-                     {_dbHelper.GetColumnName("ServerName")},
-                     {_dbHelper.GetColumnName("ApplicationName")})
+                string query = $@"INSERT INTO {dbHelper.GetTableName("ErrorLogs")}
+                    ({dbHelper.GetColumnName("LogLevel")},
+                     {dbHelper.GetColumnName("Message")},
+                     {dbHelper.GetColumnName("ExceptionType")},
+                     {dbHelper.GetColumnName("ExceptionMessage")},
+                     {dbHelper.GetColumnName("StackTrace")},
+                     {dbHelper.GetColumnName("InnerException")},
+                     {dbHelper.GetColumnName("AdditionalInfo")},
+                     {dbHelper.GetColumnName("RequestUrl")},
+                     {dbHelper.GetColumnName("UserIP")},
+                     {dbHelper.GetColumnName("UserAgent")},
+                     {dbHelper.GetColumnName("CreatedDateTime")},
+                     {dbHelper.GetColumnName("ServerName")},
+                     {dbHelper.GetColumnName("ApplicationName")})
                     VALUES
                     (@logLevel, @message, @exceptionType, @exceptionMessage, @stackTrace,
                      @innerException, @additionalInfo, @requestUrl, @userIP, @userAgent,
@@ -120,28 +261,27 @@ namespace Coupon.Helpers
 
                 var parameters = new[]
                 {
-                    _dbHelper.CreateParameter("@logLevel", logLevel ?? ""),
-                    _dbHelper.CreateParameter("@message", TruncateString(message, 500)),
-                    _dbHelper.CreateParameter("@exceptionType", ex?.GetType().Name),
-                    _dbHelper.CreateParameter("@exceptionMessage", ex?.Message),
-                    _dbHelper.CreateParameter("@stackTrace", ex?.StackTrace),
-                    _dbHelper.CreateParameter("@innerException", ex?.InnerException?.ToString()),
-                    _dbHelper.CreateParameter("@additionalInfo", additionalInfo),
-                    _dbHelper.CreateParameter("@requestUrl", TruncateString(requestUrl, 500)),
-                    _dbHelper.CreateParameter("@userIP", TruncateString(userIP, 50)),
-                    _dbHelper.CreateParameter("@userAgent", TruncateString(userAgent, 500)),
-                    _dbHelper.CreateParameter("@createdDateTime", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
-                    _dbHelper.CreateParameter("@serverName", Environment.MachineName),
-                    _dbHelper.CreateParameter("@applicationName", "Coupon System")
+                    dbHelper.CreateParameter("@logLevel", logLevel ?? ""),
+                    dbHelper.CreateParameter("@message", TruncateString(message, 500)),
+                    dbHelper.CreateParameter("@exceptionType", ex?.GetType().Name),
+                    dbHelper.CreateParameter("@exceptionMessage", ex?.Message),
+                    dbHelper.CreateParameter("@stackTrace", ex?.StackTrace),
+                    dbHelper.CreateParameter("@innerException", ex?.InnerException?.ToString()),
+                    dbHelper.CreateParameter("@additionalInfo", additionalInfo),
+                    dbHelper.CreateParameter("@requestUrl", TruncateString(requestUrl, 500)),
+                    dbHelper.CreateParameter("@userIP", TruncateString(userIP, 50)),
+                    dbHelper.CreateParameter("@userAgent", TruncateString(userAgent, 500)),
+                    dbHelper.CreateParameter("@createdDateTime", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")),
+                    dbHelper.CreateParameter("@serverName", Environment.MachineName),
+                    dbHelper.CreateParameter("@applicationName", "Coupon System")
                 };
 
-                _dbHelper.ExecuteNonQuery(query, parameters);
+                dbHelper.ExecuteNonQuery(query, parameters);
             }
             catch
             {
-                // CRITICAL: Never throw exception from logging method
-                // If database logging fails, at least file logging should work
-                // Do nothing - fail silently to prevent infinite loops
+                // Database logging failed - silently fail
+                // File logging should already have the entry
             }
         }
 
@@ -165,80 +305,21 @@ namespace Coupon.Helpers
 
         /// <summary>
         /// Log an error with context information
+        /// Always logs to file first, then attempts database logging
         /// </summary>
         public static void LogError(string message, Exception ex = null, string additionalInfo = null)
         {
+            // Always log to file first
+            WriteToFile("ERROR", message, ex, additionalInfo);
+
+            // Then try database logging
             try
             {
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                string logFilePath;
-
-                if (UseFixedLogFile)
-                {
-                    // Use the fixed file path from config
-                    logFilePath = LogPath;
-                }
-                else
-                {
-                    // Use daily rotating log files
-                    string logFileName = $"Error_{DateTime.Now:yyyyMMdd}.log";
-                    logFilePath = Path.Combine(LogPath, logFileName);
-                }
-
-                string logMessage = $"[{timestamp}] ERROR: {message}\n";
-
-                if (ex != null)
-                {
-                    logMessage += $"Exception Type: {ex.GetType().Name}\n";
-                    logMessage += $"Message: {ex.Message}\n";
-                    logMessage += $"Stack Trace: {ex.StackTrace}\n";
-
-                    if (ex.InnerException != null)
-                    {
-                        logMessage += $"Inner Exception: {ex.InnerException.Message}\n";
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(additionalInfo))
-                {
-                    logMessage += $"Additional Info: {additionalInfo}\n";
-                }
-
-                // Add request context if available
-                if (HttpContext.Current != null)
-                {
-                    try
-                    {
-                        logMessage += $"URL: {HttpContext.Current.Request.Url}\n";
-                        logMessage += $"User IP: {HttpContext.Current.Request.UserHostAddress}\n";
-                        logMessage += $"User Agent: {HttpContext.Current.Request.UserAgent}\n";
-                    }
-                    catch
-                    {
-                        // Ignore if request context is not available
-                    }
-                }
-
-                logMessage += new string('-', 80) + "\n\n";
-
-                // Write to file
-                File.AppendAllText(logFilePath, logMessage);
-
-                // ALSO write to database
                 LogToDatabase("ERROR", message, ex, additionalInfo);
             }
             catch
             {
-                // Last resort: cannot even log the error
-                // Try database logging as fallback
-                try
-                {
-                    LogToDatabase("ERROR", message, ex, additionalInfo);
-                }
-                catch
-                {
-                    // Complete failure - give up silently to prevent infinite loops
-                }
+                // Database logging failed - file log is sufficient
             }
         }
 
@@ -247,48 +328,17 @@ namespace Coupon.Helpers
         /// </summary>
         public static void LogWarning(string message, string additionalInfo = null)
         {
+            // Always log to file first
+            WriteToFile("WARNING", message, null, additionalInfo);
+
+            // Then try database logging
             try
             {
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                string logFilePath;
-
-                if (UseFixedLogFile)
-                {
-                    // Use the fixed file path from config
-                    logFilePath = LogPath;
-                }
-                else
-                {
-                    // Use daily rotating log files
-                    string logFileName = $"Warning_{DateTime.Now:yyyyMMdd}.log";
-                    logFilePath = Path.Combine(LogPath, logFileName);
-                }
-
-                string logMessage = $"[{timestamp}] WARNING: {message}\n";
-
-                if (!string.IsNullOrEmpty(additionalInfo))
-                {
-                    logMessage += $"Details: {additionalInfo}\n";
-                }
-
-                logMessage += new string('-', 80) + "\n\n";
-
-                File.AppendAllText(logFilePath, logMessage);
-
-                // ALSO write to database
                 LogToDatabase("WARNING", message, null, additionalInfo);
             }
             catch
             {
-                // Try database logging as fallback
-                try
-                {
-                    LogToDatabase("WARNING", message, null, additionalInfo);
-                }
-                catch
-                {
-                    // Complete failure - give up silently
-                }
+                // Database logging failed - file log is sufficient
             }
         }
 
@@ -297,49 +347,57 @@ namespace Coupon.Helpers
         /// </summary>
         public static void LogInfo(string message, string additionalInfo = null)
         {
+            // Always log to file first
+            WriteToFile("INFO", message, null, additionalInfo);
+
+            // Then try database logging
             try
             {
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                string logFilePath;
-
-                if (UseFixedLogFile)
-                {
-                    // Use the fixed file path from config
-                    logFilePath = LogPath;
-                }
-                else
-                {
-                    // Use daily rotating log files
-                    string logFileName = $"Info_{DateTime.Now:yyyyMMdd}.log";
-                    logFilePath = Path.Combine(LogPath, logFileName);
-                }
-
-                string logMessage = $"[{timestamp}] INFO: {message}\n";
-
-                if (!string.IsNullOrEmpty(additionalInfo))
-                {
-                    logMessage += $"Details: {additionalInfo}\n";
-                }
-
-                logMessage += new string('-', 80) + "\n\n";
-
-                File.AppendAllText(logFilePath, logMessage);
-
-                // ALSO write to database
                 LogToDatabase("INFO", message, null, additionalInfo);
             }
             catch
             {
-                // Try database logging as fallback
-                try
+                // Database logging failed - file log is sufficient
+            }
+        }
+
+        /// <summary>
+        /// Log debug message (only in non-production)
+        /// </summary>
+        public static void LogDebug(string message, string additionalInfo = null)
+        {
+            try
+            {
+                if (!SecureConfig.IsProduction())
                 {
-                    LogToDatabase("INFO", message, null, additionalInfo);
-                }
-                catch
-                {
-                    // Complete failure - give up silently
+                    WriteToFile("DEBUG", message, null, additionalInfo);
                 }
             }
+            catch
+            {
+                // Silently fail
+            }
+        }
+
+        /// <summary>
+        /// Reset database connection state (useful after reconnection)
+        /// </summary>
+        public static void ResetDatabaseState()
+        {
+            lock (_dbLock)
+            {
+                _dbHelper = null;
+                _dbInitialized = false;
+                _dbAvailable = true;
+            }
+        }
+
+        /// <summary>
+        /// Check if database logging is available
+        /// </summary>
+        public static bool IsDatabaseLoggingAvailable()
+        {
+            return _dbAvailable && _dbInitialized;
         }
     }
 }
