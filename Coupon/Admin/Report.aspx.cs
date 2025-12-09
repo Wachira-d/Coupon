@@ -3,108 +3,161 @@ using System.Configuration;
 using System.Data;
 using System.Data.Common;
 using System.DirectoryServices.AccountManagement;
+using System.IO;
+using System.Text;
 using System.Web;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using System.Text.RegularExpressions;
 using Coupon.Helpers;
 
 namespace Coupon.Admin
 {
     /// <summary>
-    /// Admin reporting page with secure authentication and database access
-    /// SECURITY: Uses parameterized queries, improved authentication, and input validation
+    /// Enhanced Admin reporting dashboard with modern UI and advanced features
+    /// SECURITY: Uses parameterized queries, session authentication, and comprehensive auditing
     /// </summary>
     public partial class Report : Page
     {
         private DatabaseHelper _dbHelper = new DatabaseHelper();
+        private DataTable _currentSearchResults; // Store for export
 
         protected void Page_Load(object sender, EventArgs e)
         {
-            // SECURITY: Check authentication before allowing access
-            if (!AuthenticationHelper.ValidateSession(Session))
+            // Store search results in ViewState for paging/sorting/export
+            if (ViewState["SearchResults"] != null)
             {
-                // Redirect to login page with return URL
-                string returnUrl = Request.Url.PathAndQuery;
-                Response.Redirect($"~/Admin/Login.aspx?ReturnUrl={Server.UrlEncode(returnUrl)}", false);
-                Context.ApplicationInstance.CompleteRequest();
-                return;
+                _currentSearchResults = (DataTable)ViewState["SearchResults"];
             }
 
-            if (!IsPostBack)
+            // SECURITY: Check authentication
+            if (!AuthenticationHelper.ValidateSession(Session))
             {
-                // Show user info
-                UserInfo currentUser = AuthenticationHelper.GetCurrentUser(Session);
-                if (currentUser != null)
+                pnlLogin.Visible = true;
+                pnlDashboard.Visible = false;
+            }
+            else
+            {
+                pnlLogin.Visible = false;
+                pnlDashboard.Visible = true;
+
+                if (!IsPostBack)
                 {
-                    lblCurrentUser.Text = currentUser.DisplayName ?? currentUser.Username;
-                    lblCurrentEmail.Text = currentUser.Email ?? "";
+                    // Show user info
+                    UserInfo currentUser = AuthenticationHelper.GetCurrentUser(Session);
+                    if (currentUser != null)
+                    {
+                        lblCurrentUser.Text = currentUser.DisplayName ?? currentUser.Username;
+                        lblCurrentEmail.Text = currentUser.Email ?? "";
+                    }
+
+                    LoadDashboardStatistics();
                 }
-
-                LoadDashboardStats();
-
-                // Hide old login controls
-                Panel1.Visible = true;
-                TextBox1.Visible = false;
-                TextBox13.Visible = false;
-                Button1.Visible = false;
             }
         }
 
+        #region Dashboard Statistics
+
         /// <summary>
-        /// Load dashboard statistics
+        /// Load comprehensive dashboard statistics
         /// </summary>
-        private void LoadDashboardStats()
+        private void LoadDashboardStatistics()
         {
             try
             {
-                // SECURITY: Safe queries without user input
+                // Get all coupons
                 string queryAll = $"SELECT * FROM {_dbHelper.GetTableName("Coupon")}";
-                string querySend = $"SELECT * FROM {_dbHelper.GetTableName("Coupon")} WHERE {_dbHelper.GetColumnName("Send_Status")} = @status";
+                DataTable dtAll = _dbHelper.ExecuteQuery(queryAll);
+                int totalCoupons = dtAll.Rows.Count;
+
+                // Get sent coupons
+                string querySent = $"SELECT * FROM {_dbHelper.GetTableName("Coupon")} WHERE {_dbHelper.GetColumnName("Send_Status")} = @status";
+                DataTable dtSent = _dbHelper.ExecuteQuery(querySent, _dbHelper.CreateParameter("@status", _dbHelper.GetBooleanValue(true)));
+                int sentCoupons = dtSent.Rows.Count;
+
+                // Get used coupons
                 string queryUsed = $"SELECT * FROM {_dbHelper.GetTableName("Coupon")} WHERE {_dbHelper.GetColumnName("Used_Status")} = @status";
+                DataTable dtUsed = _dbHelper.ExecuteQuery(queryUsed, _dbHelper.CreateParameter("@status", _dbHelper.GetBooleanValue(true)));
+                int usedCoupons = dtUsed.Rows.Count;
 
-                DataTable dtCodeAll = _dbHelper.ExecuteQuery(queryAll);
-                DataTable dtCodeSend = _dbHelper.ExecuteQuery(querySend, _dbHelper.CreateParameter("@status", _dbHelper.GetBooleanValue(true)));
-                DataTable dtCodeUsed = _dbHelper.ExecuteQuery(queryUsed, _dbHelper.CreateParameter("@status", _dbHelper.GetBooleanValue(true)));
+                // Calculate expired coupons
+                int expiredCoupons = 0;
+                foreach (DataRow row in dtAll.Rows)
+                {
+                    try
+                    {
+                        string expireDateStr = row[_dbHelper.GetColumnName("Expire_DateTime")]?.ToString();
+                        if (!string.IsNullOrEmpty(expireDateStr) && DateTime.TryParse(expireDateStr, out DateTime expireDate))
+                        {
+                            if (expireDate < DateTime.Now)
+                            {
+                                expiredCoupons++;
+                            }
+                        }
+                    }
+                    catch { }
+                }
 
-                Label1.Text = dtCodeUsed.Rows.Count + "\\" + dtCodeAll.Rows.Count;
-                Label3.Text = dtCodeSend.Rows.Count + "\\" + dtCodeAll.Rows.Count;
+                // Update labels
+                lblTotalCoupons.Text = totalCoupons.ToString("N0");
+                lblCouponsSent.Text = sentCoupons.ToString("N0");
+                lblCouponsUsed.Text = usedCoupons.ToString("N0");
+                lblExpiredCoupons.Text = expiredCoupons.ToString("N0");
+
+                // Calculate percentages
+                if (totalCoupons > 0)
+                {
+                    lblSentPercentage.Text = $"{(sentCoupons * 100.0 / totalCoupons):F1}% of total";
+                    lblUsedPercentage.Text = $"{(usedCoupons * 100.0 / totalCoupons):F1}% of total";
+                    lblExpiredPercentage.Text = $"{(expiredCoupons * 100.0 / totalCoupons):F1}% of total";
+                }
+                else
+                {
+                    lblSentPercentage.Text = "0% of total";
+                    lblUsedPercentage.Text = "0% of total";
+                    lblExpiredPercentage.Text = "0% of total";
+                }
             }
             catch (Exception ex)
             {
-                ErrorLogger.LogError("Error loading dashboard stats", ex);
+                ErrorLogger.LogError("Error loading dashboard statistics", ex);
+                lblTotalCoupons.Text = "Error";
+                lblCouponsSent.Text = "Error";
+                lblCouponsUsed.Text = "Error";
+                lblExpiredCoupons.Text = "Error";
             }
         }
 
-        /// <summary>
-        /// Admin login button click handler
-        /// SECURITY: Improved authentication with better validation
-        /// </summary>
-        protected void Button1_Click(object sender, EventArgs e)
-        {
-            string email = TextBox1.Text?.Trim();
-            string password = TextBox13.Text;
-            bool isValid = false;
+        #endregion
 
-            // SECURITY: Validate input
+        #region Authentication
+
+        /// <summary>
+        /// Admin login handler
+        /// SECURITY: LDAP authentication with email validation
+        /// </summary>
+        protected void btnLogin_Click(object sender, EventArgs e)
+        {
+            string email = txtEmail.Text?.Trim();
+            string password = txtPassword.Text;
+            string ipAddress = GetClientIpAddress();
+
+            // Validate input
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
             {
-                ErrorLogger.LogWarning("Admin login attempt with empty credentials", $"IP: {Request.UserHostAddress}");
-                TextBox13.Text = "Email and password required";
+                lblLoginError.Text = "Email and password required";
                 LogAdminAccess(email, false);
                 return;
             }
 
-            // SECURITY: Validate email format
+            // Validate email format
             if (!InputValidator.IsValidEmail(email))
             {
-                ErrorLogger.LogWarning("Admin login attempt with invalid email format", $"Email: {email}, IP: {Request.UserHostAddress}");
-                TextBox13.Text = "Invalid email format";
+                lblLoginError.Text = "Invalid email format";
                 LogAdminAccess(email, false);
                 return;
             }
 
-            // Check if email is in authorized list
+            // Check if email is authorized
             string[] authorizedEmails = ConfigurationManager.AppSettings["ReportPassword"]?.Split(';') ?? new string[0];
             bool isAuthorized = false;
 
@@ -119,19 +172,15 @@ namespace Coupon.Admin
 
             if (!isAuthorized)
             {
-                ErrorLogger.LogWarning("Admin login attempt with unauthorized email", $"Email: {email}, IP: {Request.UserHostAddress}");
-                AuditLogger.LogSecurityEvent(
-                    "Unauthorized Admin Access Attempt",
-                    Request.UserHostAddress,
-                    $"Email: {email} attempted to access admin panel",
-                    SecuritySeverity.High
-                );
-                TextBox13.Text = "Unauthorized email";
+                lblLoginError.Text = "Unauthorized access";
+                AuditLogger.LogSecurityEvent("Unauthorized Admin Access", ipAddress,
+                    $"Email: {email}", SecuritySeverity.High);
                 LogAdminAccess(email, false);
                 return;
             }
 
-            // Validate credentials against LDAP
+            // Validate against LDAP
+            bool isValid = false;
             try
             {
                 string ldapServer = ConfigurationManager.AppSettings["LDAP"];
@@ -144,56 +193,60 @@ namespace Coupon.Admin
                 }
                 else
                 {
+                    lblLoginError.Text = "Authentication system error";
                     ErrorLogger.LogError("LDAP server not configured", null);
-                    TextBox13.Text = "Authentication system error";
                     return;
                 }
             }
             catch (Exception ex)
             {
+                lblLoginError.Text = "Authentication system error";
                 ErrorLogger.LogError("LDAP authentication error", ex, $"Email: {email}");
-                TextBox13.Text = "Authentication system error";
                 LogAdminAccess(email, false);
                 return;
             }
 
             if (isValid)
             {
-                // Successful login
-                Panel1.Visible = true;
-                TextBox1.Visible = false;
-                TextBox13.Visible = false;
-                Button1.Visible = false;
+                // Create session
+                UserInfo user = new UserInfo
+                {
+                    Username = email,
+                    DisplayName = email.Split('@')[0],
+                    Email = email,
+                    IsAuthenticated = true,
+                    AuthSource = "LDAP"
+                };
 
-                LogAdminAccess(email, true);
-                ErrorLogger.LogInfo("Admin login successful", $"Email: {email}, IP: {Request.UserHostAddress}");
+                AuthenticationHelper.CreateAuthSession(Session, user);
 
-                // SECURITY: Log successful authentication to audit log
-                AuditLogger.LogAuthentication(email, true, Request.UserHostAddress, "Admin panel access");
-
-                // SECURITY: Regenerate session ID to prevent session fixation
+                // Security: Regenerate session
                 SessionManager.RegenerateSessionId(Context);
+
+                // Log success
+                AuditLogger.LogAuthentication(email, true, ipAddress, "Admin panel access");
+                LogAdminAccess(email, true);
+
+                // Reload page
+                Response.Redirect(Request.RawUrl, false);
+                Context.ApplicationInstance.CompleteRequest();
             }
             else
             {
-                TextBox13.Text = "Password incorrect";
+                lblLoginError.Text = "Invalid password";
+                AuditLogger.LogAuthentication(email, false, ipAddress, "Invalid password");
                 LogAdminAccess(email, false);
-                ErrorLogger.LogWarning("Admin login failed - invalid password", $"Email: {email}, IP: {Request.UserHostAddress}");
-
-                // SECURITY: Log failed authentication to audit log
-                AuditLogger.LogAuthentication(email, false, Request.UserHostAddress, "Invalid password");
             }
         }
 
         /// <summary>
-        /// Log admin access attempt
-        /// SECURITY: Uses parameterized query
+        /// Log admin access attempts
         /// </summary>
         private void LogAdminAccess(string email, bool canAccess)
         {
             try
             {
-                string machineName = Request.UserHostAddress;
+                string machineName = GetClientIpAddress();
                 try
                 {
                     machineName = System.Net.Dns.GetHostEntry(Request.UserHostAddress).HostName;
@@ -205,7 +258,7 @@ namespace Coupon.Admin
                                 $"{_dbHelper.GetColumnName("IP_Address")}, {_dbHelper.GetColumnName("Browser")}, " +
                                 $"{_dbHelper.GetColumnName("Access_URL")}, {_dbHelper.GetColumnName("Password")}, " +
                                 $"{_dbHelper.GetColumnName("CanAccess")}) " +
-                                $"VALUES(@createdDateTime, @machineName, @ipAddress, @browser, @accessUrl, @password, @canAccess)";
+                                $"VALUES(@createdDateTime, @machineName, @ipAddress, @browser, @accessUrl, @email, @canAccess)";
 
                 var logParams = new[]
                 {
@@ -214,7 +267,7 @@ namespace Coupon.Admin
                     _dbHelper.CreateParameter("@ipAddress", Request.UserHostAddress),
                     _dbHelper.CreateParameter("@browser", Request.Browser.Browser),
                     _dbHelper.CreateParameter("@accessUrl", Request.Url.AbsoluteUri),
-                    _dbHelper.CreateParameter("@password", email), // Log email, not password
+                    _dbHelper.CreateParameter("@email", email),
                     _dbHelper.CreateParameter("@canAccess", _dbHelper.GetBooleanValue(canAccess))
                 };
 
@@ -226,196 +279,391 @@ namespace Coupon.Admin
             }
         }
 
+        private string GetClientIpAddress()
+        {
+            string ipAddress = Request.ServerVariables["HTTP_X_FORWARDED_FOR"];
+
+            if (!string.IsNullOrEmpty(ipAddress))
+            {
+                string[] addresses = ipAddress.Split(',');
+                if (addresses.Length > 0)
+                {
+                    ipAddress = addresses[0].Trim();
+                }
+            }
+            else
+            {
+                ipAddress = Request.ServerVariables["REMOTE_ADDR"];
+            }
+
+            return ipAddress ?? "Unknown";
+        }
+
+        #endregion
+
+        #region Coupon Search
+
         /// <summary>
-        /// Search coupon button click handler
-        /// SECURITY: Uses parameterized queries for all user inputs
+        /// Search coupons with advanced filtering
         /// </summary>
-        protected void Button2_Click(object sender, EventArgs e)
+        protected void btnSearchCoupons_Click(object sender, EventArgs e)
         {
             try
             {
                 string query = $"SELECT * FROM {_dbHelper.GetTableName("Coupon")} WHERE 1=1";
                 var parameters = new System.Collections.Generic.List<DbParameter>();
 
-                // SECURITY: Validate and add parameters for each search field
-                if (!string.IsNullOrWhiteSpace(TextBox2.Text))
+                // Add search filters
+                if (!string.IsNullOrWhiteSpace(txtCouponId.Text))
                 {
-                    string id = InputValidator.SanitizeInput(TextBox2.Text);
                     query += $" AND {_dbHelper.GetColumnName("ID")} LIKE @id";
-                    parameters.Add(_dbHelper.CreateParameter("@id", "%" + id + "%"));
+                    parameters.Add(_dbHelper.CreateParameter("@id", "%" + InputValidator.SanitizeInput(txtCouponId.Text) + "%"));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox3.Text))
+                if (!string.IsNullOrWhiteSpace(txtCouponCode.Text))
                 {
-                    string code = InputValidator.SanitizeInput(TextBox3.Text);
                     query += $" AND {_dbHelper.GetColumnName("Code")} LIKE @code";
-                    parameters.Add(_dbHelper.CreateParameter("@code", "%" + code + "%"));
+                    parameters.Add(_dbHelper.CreateParameter("@code", "%" + InputValidator.SanitizeInput(txtCouponCode.Text) + "%"));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox4.Text))
+                if (!string.IsNullOrWhiteSpace(txtRegisterFrom.Text) && DateTime.TryParse(txtRegisterFrom.Text, out DateTime regFrom))
                 {
-                    if (DateTime.TryParse(TextBox4.Text, out DateTime dateFrom))
-                    {
-                        query += $" AND {_dbHelper.GetColumnName("Date_DataIn")} >= @dateFrom";
-                        parameters.Add(_dbHelper.CreateParameter("@dateFrom", dateFrom.ToString("yyyy-MM-dd")));
-                    }
+                    query += $" AND {_dbHelper.GetColumnName("Date_DataIn")} >= @regFrom";
+                    parameters.Add(_dbHelper.CreateParameter("@regFrom", regFrom.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox5.Text))
+                if (!string.IsNullOrWhiteSpace(txtRegisterTo.Text) && DateTime.TryParse(txtRegisterTo.Text, out DateTime regTo))
                 {
-                    if (DateTime.TryParse(TextBox5.Text, out DateTime dateTo))
-                    {
-                        query += $" AND {_dbHelper.GetColumnName("Date_DataIn")} <= @dateTo";
-                        parameters.Add(_dbHelper.CreateParameter("@dateTo", dateTo.ToString("yyyy-MM-dd")));
-                    }
+                    query += $" AND {_dbHelper.GetColumnName("Date_DataIn")} <= @regTo";
+                    parameters.Add(_dbHelper.CreateParameter("@regTo", regTo.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox6.Text))
+                if (!string.IsNullOrWhiteSpace(txtSendFrom.Text) && DateTime.TryParse(txtSendFrom.Text, out DateTime sendFrom))
                 {
-                    if (DateTime.TryParse(TextBox6.Text, out DateTime sendFrom))
-                    {
-                        query += $" AND {_dbHelper.GetColumnName("Date_Send")} >= @sendFrom";
-                        parameters.Add(_dbHelper.CreateParameter("@sendFrom", sendFrom.ToString("yyyy-MM-dd")));
-                    }
+                    query += $" AND {_dbHelper.GetColumnName("Date_Send")} >= @sendFrom";
+                    parameters.Add(_dbHelper.CreateParameter("@sendFrom", sendFrom.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox7.Text))
+                if (!string.IsNullOrWhiteSpace(txtSendTo.Text) && DateTime.TryParse(txtSendTo.Text, out DateTime sendTo))
                 {
-                    if (DateTime.TryParse(TextBox7.Text, out DateTime sendTo))
-                    {
-                        query += $" AND {_dbHelper.GetColumnName("Date_Send")} <= @sendTo";
-                        parameters.Add(_dbHelper.CreateParameter("@sendTo", sendTo.ToString("yyyy-MM-dd")));
-                    }
+                    query += $" AND {_dbHelper.GetColumnName("Date_Send")} <= @sendTo";
+                    parameters.Add(_dbHelper.CreateParameter("@sendTo", sendTo.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox8.Text))
+                if (!string.IsNullOrWhiteSpace(txtUsedFrom.Text) && DateTime.TryParse(txtUsedFrom.Text, out DateTime useFrom))
                 {
-                    if (DateTime.TryParse(TextBox8.Text, out DateTime useFrom))
-                    {
-                        query += $" AND {_dbHelper.GetColumnName("Date_Use")} >= @useFrom";
-                        parameters.Add(_dbHelper.CreateParameter("@useFrom", useFrom.ToString("yyyy-MM-dd")));
-                    }
+                    query += $" AND {_dbHelper.GetColumnName("Date_Use")} >= @useFrom";
+                    parameters.Add(_dbHelper.CreateParameter("@useFrom", useFrom.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox9.Text))
+                if (!string.IsNullOrWhiteSpace(txtUsedTo.Text) && DateTime.TryParse(txtUsedTo.Text, out DateTime useTo))
                 {
-                    if (DateTime.TryParse(TextBox9.Text, out DateTime useTo))
-                    {
-                        query += $" AND {_dbHelper.GetColumnName("Date_Use")} <= @useTo";
-                        parameters.Add(_dbHelper.CreateParameter("@useTo", useTo.ToString("yyyy-MM-dd")));
-                    }
+                    query += $" AND {_dbHelper.GetColumnName("Date_Use")} <= @useTo";
+                    parameters.Add(_dbHelper.CreateParameter("@useTo", useTo.ToString("yyyy-MM-dd")));
                 }
 
-                if (DropDownList1.SelectedIndex > 0)
+                if (!string.IsNullOrEmpty(ddlSendStatus.SelectedValue))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Send_Status")} = @sendStatus";
-                    parameters.Add(_dbHelper.CreateParameter("@sendStatus", DropDownList1.SelectedValue));
+                    parameters.Add(_dbHelper.CreateParameter("@sendStatus", _dbHelper.GetBooleanValue(ddlSendStatus.SelectedValue == "True")));
                 }
 
-                if (DropDownList2.SelectedIndex > 0)
+                if (!string.IsNullOrEmpty(ddlUsedStatus.SelectedValue))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Used_Status")} = @usedStatus";
-                    parameters.Add(_dbHelper.CreateParameter("@usedStatus", DropDownList2.SelectedValue));
+                    parameters.Add(_dbHelper.CreateParameter("@usedStatus", _dbHelper.GetBooleanValue(ddlUsedStatus.SelectedValue == "True")));
                 }
 
-                DataTable dtResult = _dbHelper.ExecuteQuery(query, parameters.ToArray());
-                GridView1.DataSource = dtResult;
-                GridView1.DataBind();
-                Label2.Text = dtResult.Rows.Count + " rows";
+                // Execute query
+                DataTable dtResults = _dbHelper.ExecuteQuery(query, parameters.ToArray());
 
-                ErrorLogger.LogInfo("Coupon search executed", $"Results: {dtResult.Rows.Count}, IP: {Request.UserHostAddress}");
+                // Store in ViewState for export
+                ViewState["SearchResults"] = dtResults;
+                ViewState["SearchType"] = "Coupons";
 
-                // SECURITY: Log admin search activity
+                // Bind to grid
+                gvResults.DataSource = dtResults;
+                gvResults.DataBind();
+
+                // Show results
+                pnlResults.Visible = true;
+                lblResultCount.Text = $"Found {dtResults.Rows.Count:N0} coupon(s)";
+
+                // Log search
+                UserInfo user = AuthenticationHelper.GetCurrentUser(Session);
                 AuditLogger.LogAdminAction(
-                    "admin",
+                    user?.Username ?? "admin",
                     "Coupon Search",
-                    Request.UserHostAddress,
-                    $"Results: {dtResult.Rows.Count} records"
+                    "Report",
+                    GetClientIpAddress(),
+                    $"Found {dtResults.Rows.Count} records"
                 );
             }
             catch (Exception ex)
             {
-                ErrorLogger.LogError("Error during coupon search", ex);
-                Label2.Text = "Search error";
+                ErrorLogger.LogError("Error searching coupons", ex);
+                lblResultCount.Text = "Search error occurred";
             }
         }
 
         /// <summary>
-        /// Clear search results button
+        /// Clear coupon search form
         /// </summary>
-        protected void Button3_Click(object sender, EventArgs e)
+        protected void btnClearCouponSearch_Click(object sender, EventArgs e)
         {
-            GridView1.DataSource = null;
-            GridView1.DataBind();
-            Label2.Text = "";
+            txtCouponId.Text = "";
+            txtCouponCode.Text = "";
+            txtRegisterFrom.Text = "";
+            txtRegisterTo.Text = "";
+            txtSendFrom.Text = "";
+            txtSendTo.Text = "";
+            txtUsedFrom.Text = "";
+            txtUsedTo.Text = "";
+            ddlSendStatus.SelectedIndex = 0;
+            ddlUsedStatus.SelectedIndex = 0;
+            pnlResults.Visible = false;
+            ViewState["SearchResults"] = null;
         }
 
+        #endregion
+
+        #region Logs Search
+
         /// <summary>
-        /// Search logs button click handler
-        /// SECURITY: Uses parameterized queries for all user inputs
+        /// Search access logs
         /// </summary>
-        protected void Button4_Click(object sender, EventArgs e)
+        protected void btnSearchLogs_Click(object sender, EventArgs e)
         {
             try
             {
                 string query = $"SELECT * FROM {_dbHelper.GetTableName("Logs")} WHERE 1=1";
                 var parameters = new System.Collections.Generic.List<DbParameter>();
 
-                // SECURITY: Validate and add parameters for each search field
-                if (!string.IsNullOrWhiteSpace(TextBox12.Text))
+                if (!string.IsNullOrWhiteSpace(txtLogCouponId.Text))
                 {
-                    string url = InputValidator.SanitizeInput(TextBox12.Text);
                     query += $" AND {_dbHelper.GetColumnName("Access_URL")} LIKE @url";
-                    parameters.Add(_dbHelper.CreateParameter("@url", "%" + url + "%"));
+                    parameters.Add(_dbHelper.CreateParameter("@url", "%" + InputValidator.SanitizeInput(txtLogCouponId.Text) + "%"));
                 }
 
-                if (CheckBox4.Checked)
+                if (chkRedeemAction.Checked)
                 {
                     query += $" AND {_dbHelper.GetColumnName("Access_URL")} LIKE @redeem";
                     parameters.Add(_dbHelper.CreateParameter("@redeem", "%Redeem%"));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox10.Text))
+                if (!string.IsNullOrWhiteSpace(txtLogFrom.Text) && DateTime.TryParse(txtLogFrom.Text, out DateTime logFrom))
                 {
-                    if (DateTime.TryParse(TextBox10.Text, out DateTime dateFrom))
-                    {
-                        query += $" AND {_dbHelper.GetColumnName("Created_DateTime")} >= @dateFrom";
-                        parameters.Add(_dbHelper.CreateParameter("@dateFrom", dateFrom.ToString("yyyy-MM-dd")));
-                    }
+                    query += $" AND {_dbHelper.GetColumnName("Created_DateTime")} >= @logFrom";
+                    parameters.Add(_dbHelper.CreateParameter("@logFrom", logFrom.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(TextBox11.Text))
+                if (!string.IsNullOrWhiteSpace(txtLogTo.Text) && DateTime.TryParse(txtLogTo.Text, out DateTime logTo))
                 {
-                    if (DateTime.TryParse(TextBox11.Text, out DateTime dateTo))
-                    {
-                        query += $" AND {_dbHelper.GetColumnName("Created_DateTime")} <= @dateTo";
-                        parameters.Add(_dbHelper.CreateParameter("@dateTo", dateTo.ToString("yyyy-MM-dd")));
-                    }
+                    query += $" AND {_dbHelper.GetColumnName("Created_DateTime")} <= @logTo";
+                    parameters.Add(_dbHelper.CreateParameter("@logTo", logTo.ToString("yyyy-MM-dd")));
                 }
 
                 query += $" AND {_dbHelper.GetColumnName("Found_Coupon")} = @foundCoupon";
-                parameters.Add(_dbHelper.CreateParameter("@foundCoupon", _dbHelper.GetBooleanValue(CheckBox3.Checked)));
+                parameters.Add(_dbHelper.CreateParameter("@foundCoupon", _dbHelper.GetBooleanValue(chkFoundCoupon.Checked)));
 
-                DataTable dtResult = _dbHelper.ExecuteQuery(query, parameters.ToArray());
-                GridView1.DataSource = dtResult;
-                GridView1.DataBind();
-                Label2.Text = dtResult.Rows.Count + " rows";
+                // Execute query
+                DataTable dtResults = _dbHelper.ExecuteQuery(query, parameters.ToArray());
 
-                ErrorLogger.LogInfo("Logs search executed", $"Results: {dtResult.Rows.Count}, IP: {Request.UserHostAddress}");
+                // Store in ViewState
+                ViewState["SearchResults"] = dtResults;
+                ViewState["SearchType"] = "Logs";
 
-                // SECURITY: Log admin search activity
+                // Bind to grid
+                gvResults.DataSource = dtResults;
+                gvResults.DataBind();
+
+                // Show results
+                pnlResults.Visible = true;
+                lblResultCount.Text = $"Found {dtResults.Rows.Count:N0} log(s)";
+
+                // Log search
+                UserInfo user = AuthenticationHelper.GetCurrentUser(Session);
                 AuditLogger.LogAdminAction(
-                    "admin",
+                    user?.Username ?? "admin",
                     "Logs Search",
-                    Request.UserHostAddress,
-                    $"Results: {dtResult.Rows.Count} records"
+                    "Report",
+                    GetClientIpAddress(),
+                    $"Found {dtResults.Rows.Count} records"
                 );
             }
             catch (Exception ex)
             {
-                ErrorLogger.LogError("Error during logs search", ex);
-                Label2.Text = "Search error";
+                ErrorLogger.LogError("Error searching logs", ex);
+                lblResultCount.Text = "Search error occurred";
             }
         }
+
+        /// <summary>
+        /// Clear log search form
+        /// </summary>
+        protected void btnClearLogSearch_Click(object sender, EventArgs e)
+        {
+            txtLogFrom.Text = "";
+            txtLogTo.Text = "";
+            txtLogCouponId.Text = "";
+            chkFoundCoupon.Checked = true;
+            chkRedeemAction.Checked = false;
+            pnlResults.Visible = false;
+            ViewState["SearchResults"] = null;
+        }
+
+        #endregion
+
+        #region GridView Events
+
+        /// <summary>
+        /// Handle GridView paging
+        /// </summary>
+        protected void gvResults_PageIndexChanging(object sender, GridViewPageEventArgs e)
+        {
+            gvResults.PageIndex = e.NewPageIndex;
+
+            if (ViewState["SearchResults"] != null)
+            {
+                gvResults.DataSource = (DataTable)ViewState["SearchResults"];
+                gvResults.DataBind();
+            }
+        }
+
+        /// <summary>
+        /// Handle GridView sorting
+        /// </summary>
+        protected void gvResults_Sorting(object sender, GridViewSortEventArgs e)
+        {
+            if (ViewState["SearchResults"] != null)
+            {
+                DataTable dt = (DataTable)ViewState["SearchResults"];
+                DataView dv = new DataView(dt);
+
+                // Determine sort direction
+                string sortDirection = "ASC";
+                if (ViewState["SortExpression"] != null && ViewState["SortExpression"].ToString() == e.SortExpression)
+                {
+                    sortDirection = ViewState["SortDirection"]?.ToString() == "ASC" ? "DESC" : "ASC";
+                }
+
+                ViewState["SortExpression"] = e.SortExpression;
+                ViewState["SortDirection"] = sortDirection;
+
+                dv.Sort = $"{e.SortExpression} {sortDirection}";
+                gvResults.DataSource = dv;
+                gvResults.DataBind();
+            }
+        }
+
+        #endregion
+
+        #region Export Functionality
+
+        /// <summary>
+        /// Export coupons to Excel
+        /// </summary>
+        protected void btnExportCoupons_Click(object sender, EventArgs e)
+        {
+            if (ViewState["SearchResults"] != null)
+            {
+                DataTable dt = (DataTable)ViewState["SearchResults"];
+                ExportToExcel(dt, "CouponReport");
+
+                // Log export
+                UserInfo user = AuthenticationHelper.GetCurrentUser(Session);
+                AuditLogger.LogAdminAction(
+                    user?.Username ?? "admin",
+                    "Export Coupons",
+                    "Report",
+                    GetClientIpAddress(),
+                    $"Exported {dt.Rows.Count} coupon records"
+                );
+            }
+        }
+
+        /// <summary>
+        /// Export logs to Excel
+        /// </summary>
+        protected void btnExportLogs_Click(object sender, EventArgs e)
+        {
+            if (ViewState["SearchResults"] != null)
+            {
+                DataTable dt = (DataTable)ViewState["SearchResults"];
+                ExportToExcel(dt, "AccessLogsReport");
+
+                // Log export
+                UserInfo user = AuthenticationHelper.GetCurrentUser(Session);
+                AuditLogger.LogAdminAction(
+                    user?.Username ?? "admin",
+                    "Export Logs",
+                    "Report",
+                    GetClientIpAddress(),
+                    $"Exported {dt.Rows.Count} log records"
+                );
+            }
+        }
+
+        /// <summary>
+        /// Export DataTable to Excel (CSV format)
+        /// </summary>
+        private void ExportToExcel(DataTable dt, string filename)
+        {
+            try
+            {
+                Response.Clear();
+                Response.Buffer = true;
+                Response.AddHeader("content-disposition", $"attachment;filename={filename}_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+                Response.Charset = "";
+                Response.ContentType = "application/text";
+                Response.ContentEncoding = Encoding.UTF8;
+                Response.BOM = Encoding.UTF8.GetPreamble();
+
+                StringBuilder sb = new StringBuilder();
+
+                // Add column headers
+                for (int i = 0; i < dt.Columns.Count; i++)
+                {
+                    sb.Append(EscapeCsvField(dt.Columns[i].ColumnName));
+                    if (i < dt.Columns.Count - 1)
+                        sb.Append(",");
+                }
+                sb.AppendLine();
+
+                // Add data rows
+                foreach (DataRow row in dt.Rows)
+                {
+                    for (int i = 0; i < dt.Columns.Count; i++)
+                    {
+                        sb.Append(EscapeCsvField(row[i].ToString()));
+                        if (i < dt.Columns.Count - 1)
+                            sb.Append(",");
+                    }
+                    sb.AppendLine();
+                }
+
+                Response.Output.Write(sb.ToString());
+                Response.Flush();
+                Response.End();
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError("Error exporting to Excel", ex);
+            }
+        }
+
+        /// <summary>
+        /// Escape CSV field to handle commas and quotes
+        /// </summary>
+        private string EscapeCsvField(string field)
+        {
+            if (field.Contains(",") || field.Contains("\"") || field.Contains("\n"))
+            {
+                return "\"" + field.Replace("\"", "\"\"") + "\"";
+            }
+            return field;
+        }
+
+        #endregion
     }
 }
