@@ -87,12 +87,11 @@ namespace Coupon.Admin
                     }
 
                     // Log successful login
-                    AuditLogger.LogUserActivity(
+                    AuditLogger.LogAuthentication(
                         result.User.Username,
-                        "User Login",
-                        "Successful login",
-                        $"Auth Source: {result.AuthSource}, IP: {ipAddress}",
-                        ipAddress
+                        true,
+                        ipAddress,
+                        $"Auth Source: {result.AuthSource}"
                     );
 
                     // Show success message
@@ -118,9 +117,9 @@ namespace Coupon.Admin
                     // Log failed login
                     AuditLogger.LogSecurityEvent(
                         "Failed Login Attempt",
+                        ipAddress,
                         $"Username: {username}, Reason: {result.Message}",
-                        "Medium",
-                        ipAddress
+                        SecuritySeverity.Medium
                     );
 
                     // Clear password field

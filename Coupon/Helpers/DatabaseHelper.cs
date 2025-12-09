@@ -127,6 +127,64 @@ namespace Coupon.Helpers
         }
 
         /// <summary>
+        /// Execute a parameterized scalar query (returns single value)
+        /// SECURITY: Uses parameterized queries to prevent SQL injection
+        /// </summary>
+        public object ExecuteScalar(string query, params DbParameter[] parameters)
+        {
+            object result = null;
+
+            try
+            {
+                if (_databaseType == "postgresql")
+                {
+                    using (NpgsqlConnection connection = new NpgsqlConnection(_connectionString))
+                    {
+                        using (NpgsqlCommand command = new NpgsqlCommand(query, connection))
+                        {
+                            if (parameters != null)
+                            {
+                                foreach (var param in parameters)
+                                {
+                                    command.Parameters.Add(ConvertToNpgsqlParameter(param));
+                                }
+                            }
+
+                            connection.Open();
+                            result = command.ExecuteScalar();
+                        }
+                    }
+                }
+                else
+                {
+                    using (SqlConnection connection = new SqlConnection(_connectionString))
+                    {
+                        using (SqlCommand command = new SqlCommand(query, connection))
+                        {
+                            if (parameters != null)
+                            {
+                                foreach (var param in parameters)
+                                {
+                                    command.Parameters.Add(ConvertToSqlParameter(param));
+                                }
+                            }
+
+                            connection.Open();
+                            result = command.ExecuteScalar();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError("Database Scalar Query Error", ex, query);
+                throw;
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Execute a parameterized non-query command (INSERT, UPDATE, DELETE)
         /// SECURITY: Uses parameterized queries to prevent SQL injection
         /// </summary>

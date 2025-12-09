@@ -26,12 +26,12 @@ namespace Coupon.Admin
             }
 
             // Log logout
-            AuditLogger.LogUserActivity(
+            AuditLogger.LogAdminAction(
                 username,
                 "User Logout",
-                "User logged out",
-                $"IP: {ipAddress}",
-                ipAddress
+                "Session",
+                ipAddress,
+                "User logged out successfully"
             );
 
             // Redirect to login page

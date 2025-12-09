@@ -238,7 +238,8 @@ namespace Coupon.Admin
                 DataTable dt = new DataTable();
 
                 // Create ExcelPackage instance
-                using (var package = Activator.CreateInstance(excelPackageType, stream))
+                var package = Activator.CreateInstance(excelPackageType, stream);
+                try
                 {
                     // Get Workbook property
                     var workbookProperty = excelPackageType.GetProperty("Workbook");
@@ -322,6 +323,14 @@ namespace Coupon.Admin
                         {
                             dt.Rows.Add(dataRow);
                         }
+                    }
+                }
+                finally
+                {
+                    // Dispose if package implements IDisposable
+                    if (package is IDisposable disposable)
+                    {
+                        disposable.Dispose();
                     }
                 }
 
