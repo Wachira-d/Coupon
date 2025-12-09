@@ -338,9 +338,9 @@
                                 <div class="map-label">Coupon ID Column:</div>
                                 <div class="map-arrow">→</div>
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <asp:DropDownList ID="ddlColumnID" runat="server" CssClass="form-control map-select" />
+                                    <asp:DropDownList ID="ddlColumnID" runat="server" CssClass="form-control map-select" Enabled="false" />
                                     <div style="white-space: nowrap;">
-                                        <asp:CheckBox ID="chkAutoGenerateID" runat="server" AutoPostBack="true" OnCheckedChanged="chkAutoGenerateID_CheckedChanged" />
+                                        <asp:CheckBox ID="chkAutoGenerateID" runat="server" Checked="true" AutoPostBack="true" OnCheckedChanged="chkAutoGenerateID_CheckedChanged" />
                                         <label for="<%= chkAutoGenerateID.ClientID %>" style="margin-left: 5px; cursor: pointer;">Auto-generate ID</label>
                                     </div>
                                 </div>
