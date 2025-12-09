@@ -3,7 +3,7 @@
 ## ภาษาไทย
 
 ### ภาพรวมระบบ
-ระบบนี้ช่วยให้คุณสามารถนำเข้าคูปองจำนวนมากพร้อมกันผ่านไฟล์ CSV
+ระบบนี้ช่วยให้คุณสามารถนำเข้าคูปองจำนวนมากพร้อมกันผ่านไฟล์ CSV หรือ Excel (.xlsx)
 
 ### ขั้นตอนการใช้งาน
 
@@ -50,10 +50,44 @@ ABC003,1234567890125,Test coupon 3
 #### 6. Import ไฟล์ใหม่
 - คลิก "🔄 Import Another File" เพื่อเริ่มต้นใหม่
 
+### การรองรับ Excel (Excel Support)
+
+#### ขั้นตอนการติดตั้ง EPPlus (เพื่อรองรับ Excel)
+
+ระบบรองรับไฟล์ Excel (.xlsx, .xls) โดยใช้ library **EPPlus**
+
+**วิธีที่ 1: ใช้ PowerShell Script (แนะนำ)**
+```powershell
+# รันใน solution directory
+.\InstallEPPlus.ps1
+```
+
+**วิธีที่ 2: ใช้ Visual Studio**
+1. เปิด solution ใน Visual Studio
+2. Right-click โปรเจกต์ "Coupon"
+3. เลือก "Manage NuGet Packages"
+4. ค้นหา "EPPlus"
+5. ติดตั้ง version **4.5.3.3**
+6. Build solution (Ctrl+Shift+B)
+
+**วิธีที่ 3: ใช้ CSV แทน (ไม่ต้องติดตั้งอะไร)**
+- เปิดไฟล์ Excel
+- File → Save As
+- เลือก "CSV (Comma delimited) (*.csv)"
+- Upload ไฟล์ CSV
+
+#### หากยังไม่ได้ติดตั้ง EPPlus
+
+หากพยายาม upload Excel โดยยังไม่ได้ติดตั้ง EPPlus ระบบจะแสดงข้อความ:
+> "Excel support requires EPPlus library"
+
+พร้อมคำแนะนำการติดตั้ง
+
 ### ข้อจำกัดและข้อควรระวัง
 
-1. **รองรับเฉพาะ CSV**: ขณะนี้รองรับเฉพาะไฟล์ .csv เท่านั้น
-   - หาก Excel (.xlsx, .xls): ให้ Save As → CSV (Comma delimited) ก่อน
+1. **รองรับไฟล์**:
+   - ✅ CSV (.csv) - รองรับเสมอ
+   - ✅ Excel (.xlsx, .xls) - ต้องติดตั้ง EPPlus ก่อน
 
 2. **ขนาดไฟล์**: สูงสุด 10MB
 
@@ -63,12 +97,18 @@ ABC003,1234567890125,Test coupon 3
 
 5. **ข้อมูลว่าง**: แถวที่มี ID หรือ Barcode ว่างจะถูกข้าม
 
+6. **Excel Worksheets**: ระบบจะอ่านแค่ Sheet แรกเท่านั้น
+
 ### แก้ไขปัญหา
 
 #### ปัญหา: ไม่สามารถ Upload ไฟล์ได้
-- ตรวจสอบว่าไฟล์เป็น .csv
+- ตรวจสอบว่าไฟล์เป็น .csv หรือ .xlsx/.xls
 - ตรวจสอบขนาดไฟล์ไม่เกิน 10MB
 - ตรวจสอบว่าไฟล์ไม่ได้เปิดอยู่ใน Excel
+
+#### ปัญหา: Upload Excel แล้วขึ้น "Excel support requires EPPlus library"
+- ติดตั้ง EPPlus ตามวิธีด้านบน
+- **หรือ** แปลงไฟล์เป็น CSV ก่อน upload
 
 #### ปัญหา: ระบบตรวจจับคอลัมน์ผิด
 - เลือกคอลัมน์ที่ถูกต้องจาก dropdown ด้วยตนเอง
@@ -77,13 +117,14 @@ ABC003,1234567890125,Test coupon 3
 #### ปัญหา: Import ล้มเหลว
 - ตรวจสอบ Log ที่: `http://yourdomain/Coupon/ViewErrorLogs.aspx`
 - ตรวจสอบว่าข้อมูลในไฟล์ถูกต้องและไม่มีตัวอักษรพิเศษ
+- สำหรับ Excel: ตรวจสอบว่า Sheet แรกมีข้อมูล และมี Header row
 
 ---
 
 ## English
 
 ### System Overview
-This system allows you to import multiple coupons at once via CSV file upload.
+This system allows you to import multiple coupons at once via CSV or Excel (.xlsx) file upload.
 
 ### Usage Steps
 

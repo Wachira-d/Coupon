@@ -60,12 +60,9 @@ namespace Coupon.Admin
                 {
                     dt = ParseCSV(fileUpload.PostedFile.InputStream);
                 }
-                else
+                else // Excel files
                 {
-                    // For Excel, save temporarily and use OleDb or recommend CSV
-                    ShowError("Excel files are not yet supported. Please save your file as CSV (.csv) first.\n\n" +
-                             "In Excel: File → Save As → CSV (Comma delimited)");
-                    return;
+                    dt = ParseExcel(fileUpload.PostedFile.InputStream, fileExtension);
                 }
 
                 if (dt == null || dt.Rows.Count == 0)
@@ -188,6 +185,151 @@ namespace Coupon.Admin
             values.Add(currentValue.ToString());
 
             return values.ToArray();
+        }
+
+        /// <summary>
+        /// Parse Excel file using reflection to avoid hard dependency on EPPlus
+        /// If EPPlus is not installed, will show friendly error message
+        /// </summary>
+        private DataTable ParseExcel(Stream stream, string fileExtension)
+        {
+            try
+            {
+                // Try to load EPPlus assembly using reflection
+                var epplusAssembly = System.Reflection.Assembly.Load("EPPlus");
+                if (epplusAssembly == null)
+                {
+                    throw new FileNotFoundException("EPPlus assembly not found");
+                }
+
+                // Get ExcelPackage type
+                Type excelPackageType = epplusAssembly.GetType("OfficeOpenXml.ExcelPackage");
+                if (excelPackageType == null)
+                {
+                    throw new TypeLoadException("Could not load ExcelPackage type");
+                }
+
+                // Set EPPlus license context for newer versions
+                Type licenseContextType = epplusAssembly.GetType("OfficeOpenXml.ExcelPackage+LicenseContext");
+                if (licenseContextType != null)
+                {
+                    // EPPlus 5+ requires license context, but we're using 4.x which doesn't need it
+                    // This code is here for future compatibility
+                }
+
+                DataTable dt = new DataTable();
+
+                // Create ExcelPackage instance
+                using (var package = Activator.CreateInstance(excelPackageType, stream))
+                {
+                    // Get Workbook property
+                    var workbookProperty = excelPackageType.GetProperty("Workbook");
+                    var workbook = workbookProperty.GetValue(package);
+
+                    // Get Worksheets property
+                    var worksheetsProperty = workbook.GetType().GetProperty("Worksheets");
+                    var worksheets = worksheetsProperty.GetValue(workbook);
+
+                    // Get first worksheet
+                    var firstMethod = worksheets.GetType().GetMethod("get_Item", new Type[] { typeof(int) });
+                    var worksheet = firstMethod.Invoke(worksheets, new object[] { 1 }); // 1-indexed
+
+                    if (worksheet == null)
+                    {
+                        throw new Exception("No worksheets found in Excel file");
+                    }
+
+                    // Get Dimension property
+                    var dimensionProperty = worksheet.GetType().GetProperty("Dimension");
+                    var dimension = dimensionProperty.GetValue(worksheet);
+
+                    if (dimension == null)
+                    {
+                        throw new Exception("Excel worksheet is empty");
+                    }
+
+                    // Get row and column counts
+                    var endProperty = dimension.GetType().GetProperty("End");
+                    var end = endProperty.GetValue(dimension);
+                    var rowProperty = end.GetType().GetProperty("Row");
+                    var columnProperty = end.GetType().GetProperty("Column");
+
+                    int endRow = (int)rowProperty.GetValue(end);
+                    int endColumn = (int)columnProperty.GetValue(end);
+
+                    // Limit to 10,000 rows
+                    endRow = Math.Min(endRow, 10000);
+
+                    // Get Cells property method
+                    var cellsProperty = worksheet.GetType().GetProperty("Cells");
+
+                    // Read header row (row 1)
+                    for (int col = 1; col <= endColumn; col++)
+                    {
+                        var cellAddress = cellsProperty.GetValue(worksheet);
+                        var indexer = cellAddress.GetType().GetProperty("Item", new Type[] { typeof(int), typeof(int) });
+                        var cell = indexer.GetValue(cellAddress, new object[] { 1, col });
+
+                        var textProperty = cell.GetType().GetProperty("Text");
+                        string headerText = textProperty.GetValue(cell)?.ToString() ?? $"Column{col}";
+
+                        dt.Columns.Add(headerText.Trim());
+                    }
+
+                    // Read data rows
+                    for (int row = 2; row <= endRow; row++)
+                    {
+                        DataRow dataRow = dt.NewRow();
+                        bool hasData = false;
+
+                        for (int col = 1; col <= endColumn && col <= dt.Columns.Count; col++)
+                        {
+                            var cellAddress = cellsProperty.GetValue(worksheet);
+                            var indexer = cellAddress.GetType().GetProperty("Item", new Type[] { typeof(int), typeof(int) });
+                            var cell = indexer.GetValue(cellAddress, new object[] { row, col });
+
+                            var textProperty = cell.GetType().GetProperty("Text");
+                            string cellValue = textProperty.GetValue(cell)?.ToString() ?? "";
+
+                            dataRow[col - 1] = cellValue.Trim();
+
+                            if (!string.IsNullOrWhiteSpace(cellValue))
+                            {
+                                hasData = true;
+                            }
+                        }
+
+                        // Only add rows that have at least one non-empty cell
+                        if (hasData)
+                        {
+                            dt.Rows.Add(dataRow);
+                        }
+                    }
+                }
+
+                return dt;
+            }
+            catch (FileNotFoundException)
+            {
+                // EPPlus not installed
+                throw new Exception(
+                    "Excel support requires EPPlus library.\n\n" +
+                    "INSTALLATION STEPS:\n" +
+                    "1. Run InstallEPPlus.ps1 from the solution directory\n" +
+                    "   OR\n" +
+                    "2. In Visual Studio: Right-click project → Manage NuGet Packages → Install 'EPPlus' version 4.5.3.3\n\n" +
+                    "ALTERNATIVE:\n" +
+                    "Convert your Excel file to CSV:\n" +
+                    "- Open file in Excel\n" +
+                    "- File → Save As → CSV (Comma delimited) (*.csv)\n" +
+                    "- Then upload the CSV file"
+                );
+            }
+            catch (Exception ex)
+            {
+                ErrorLogger.LogError("Error parsing Excel file", ex);
+                throw new Exception($"Failed to read Excel file: {ex.Message}\n\nPlease try converting to CSV format instead.");
+            }
         }
 
         /// <summary>
