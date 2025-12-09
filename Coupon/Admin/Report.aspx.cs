@@ -195,18 +195,23 @@ namespace Coupon.Admin
             if (authResult.Success)
             {
                 // Create session using auth result or fallback values
-                UserInfo user = authResult.User ?? new UserInfo
-                {
-                    Username = email,
-                    DisplayName = email.Split('@')[0],
-                    Email = email
-                };
+                UserInfo user = authResult.User ?? new UserInfo();
+
+                // Ensure essential fields are always set
+                if (string.IsNullOrEmpty(user.Username))
+                    user.Username = email;
+                if (string.IsNullOrEmpty(user.DisplayName))
+                    user.DisplayName = email.Split('@')[0];
+                if (string.IsNullOrEmpty(user.Email))
+                    user.Email = email;
+
                 user.IsAuthenticated = true;
                 user.AuthSource = authResult.AuthSource ?? "API";
 
+                // Set authentication session data
                 AuthenticationHelper.CreateAuthSession(Session, user);
 
-                // Security: Regenerate session
+                // Security: Regenerate session token (prevents session fixation)
                 SessionManager.RegenerateSessionId(Context);
 
                 // Log success

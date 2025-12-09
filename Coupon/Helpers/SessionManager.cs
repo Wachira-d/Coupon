@@ -221,30 +221,15 @@ namespace Coupon.Helpers
 
             try
             {
-                // Save current session data
-                var tempData = new System.Collections.Generic.Dictionary<string, object>();
-                foreach (string key in context.Session.Keys)
-                {
-                    tempData[key] = context.Session[key];
-                }
+                // Note: Session.Abandon() marks session for deletion at END of request,
+                // which causes ALL session data (including data set after Abandon) to be lost.
+                // Instead, we generate a new internal session token without abandoning.
 
-                // Abandon old session
-                context.Session.Abandon();
+                // Generate new internal session ID token for security tracking
+                context.Session[SESSION_ID_KEY] = Guid.NewGuid().ToString();
+                context.Session["SessionRegenerated"] = DateTime.Now;
 
-                // Create new session with new ID
-                if (context.Session != null)
-                {
-                    // Restore data
-                    foreach (var kvp in tempData)
-                    {
-                        context.Session[kvp.Key] = kvp.Value;
-                    }
-
-                    // Generate new session ID
-                    context.Session[SESSION_ID_KEY] = Guid.NewGuid().ToString();
-                }
-
-                ErrorLogger.LogInfo("Session ID regenerated");
+                ErrorLogger.LogInfo("Session ID token regenerated");
             }
             catch (Exception ex)
             {
