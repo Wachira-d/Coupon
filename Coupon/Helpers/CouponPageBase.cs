@@ -38,6 +38,7 @@ namespace Coupon.Helpers
             {
                 // Initialize brand-specific settings
                 InitializeBrandSettings();
+                ErrorLogger.LogInfo($"{BrandName} page loading", $"URL: {Request.Url}");
 
                 // SECURITY: Validate and sanitize input
                 string id = InputValidator.GetSafeQueryStringParameter(Request, "id", 20);
@@ -48,6 +49,8 @@ namespace Coupon.Helpers
                     ShowError("รหัสคูปองไม่ถูกต้อง");
                     return;
                 }
+
+                ErrorLogger.LogInfo($"{BrandName} processing coupon", $"ID: {id}");
 
                 // SECURITY: Validate coupon ID format
                 int expectedLength = Convert.ToInt32(ConfigurationManager.AppSettings["NumberofCode"] ?? "4");
@@ -61,7 +64,10 @@ namespace Coupon.Helpers
                 // SECURITY: Use parameterized query
                 string query = $"SELECT * FROM {_dbHelper.GetTableName("coupon")} WHERE {_dbHelper.GetColumnName("ID")} = @id";
                 var parameter = _dbHelper.CreateParameter("@id", id);
+
+                ErrorLogger.LogInfo($"{BrandName} executing query", $"Query: {query}, ID: {id}");
                 DataTable dtCode = _dbHelper.ExecuteQuery(query, parameter);
+                ErrorLogger.LogInfo($"{BrandName} query result", $"Rows found: {dtCode.Rows.Count}");
 
                 // Log access attempt
                 LogAccess(id, dtCode.Rows.Count);
@@ -94,8 +100,20 @@ namespace Coupon.Helpers
             }
             catch (Exception ex)
             {
-                ErrorLogger.LogError($"Error in {BrandName} Page_Load", ex);
-                ShowError("เกิดข้อผิดพลาดในการโหลดหน้า กรุณาลองใหม่อีกครั้ง");
+                ErrorLogger.LogError($"CRITICAL ERROR in {BrandName} Page_Load", ex,
+                    $"URL: {Request?.Url?.ToString() ?? "Unknown"}, " +
+                    $"QueryString: {Request?.QueryString?.ToString() ?? "None"}, " +
+                    $"IP: {Request?.UserHostAddress ?? "Unknown"}");
+
+                // Show detailed error in development, generic in production
+                if (System.Configuration.ConfigurationManager.AppSettings["Environment"] == "Development")
+                {
+                    ShowError($"Error: {ex.Message}");
+                }
+                else
+                {
+                    ShowError("เกิดข้อผิดพลาดในการโหลดหน้า กรุณาลองใหม่อีกครั้ง");
+                }
             }
         }
 
@@ -167,7 +185,16 @@ namespace Coupon.Helpers
         {
             try
             {
-                string couponValue = dtCode.Rows[0]["Value"].ToString();
+                // Get coupon value with case-insensitive column search
+                string couponValue = GetColumnValue(dtCode.Rows[0], "Value", "value", "CouponValue", "coupon_value");
+                if (string.IsNullOrEmpty(couponValue))
+                {
+                    ErrorLogger.LogError($"Value column not found on {BrandName}", null,
+                        $"Available columns: {string.Join(", ", GetColumnNames(dtCode))}");
+                    ShowError("ไม่พบข้อมูลมูลค่าคูปอง");
+                    return;
+                }
+
                 string imagePath200 = $"./Images/{ImagePath}/200.png";
                 string imagePath300 = $"./Images/{ImagePath}/300.png";
 
@@ -192,9 +219,10 @@ namespace Coupon.Helpers
                 DateTime expireDate = DateTime.Now;
                 try
                 {
-                    if (dtCode.Rows[0]["Expire_DateTime"] != DBNull.Value)
+                    string expireDateStr = GetColumnValue(dtCode.Rows[0], "Expire_DateTime", "expire_datetime", "ExpireDate", "expire_date");
+                    if (!string.IsNullOrEmpty(expireDateStr))
                     {
-                        expireDate = Convert.ToDateTime(dtCode.Rows[0]["Expire_DateTime"].ToString());
+                        expireDate = Convert.ToDateTime(expireDateStr);
                     }
                 }
                 catch (Exception ex)
@@ -228,8 +256,13 @@ namespace Coupon.Helpers
                 }
 
                 // Check used status
-                string usedStatus = dtCode.Rows[0]["Used_Status"].ToString().ToLower();
-                bool isUsed = usedStatus == "1" || usedStatus == "true";
+                string usedStatus = GetColumnValue(dtCode.Rows[0], "Used_Status", "used_status", "UsedStatus", "IsUsed", "is_used");
+                bool isUsed = false;
+                if (!string.IsNullOrEmpty(usedStatus))
+                {
+                    usedStatus = usedStatus.ToLower();
+                    isUsed = usedStatus == "1" || usedStatus == "true" || usedStatus == "t";
+                }
 
                 if (!isUsed && DateTime.Now > expireDate)
                 {
