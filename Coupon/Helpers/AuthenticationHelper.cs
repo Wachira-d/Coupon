@@ -223,7 +223,30 @@ namespace Coupon.Helpers
                 var response = _httpClient.SendAsync(request).Result;
                 string responseBody = response.Content.ReadAsStringAsync().Result;
 
-                var apiResult = JsonConvert.DeserializeObject<JObject>(responseBody);
+                // Handle null or empty response
+                if (string.IsNullOrWhiteSpace(responseBody))
+                {
+                    ErrorLogger.LogWarning("Empty API response during authentication", $"Username: {username}, StatusCode: {response.StatusCode}");
+                    return HandleApiFailure(username, passwordHash, "Empty API response", ipAddress, userAgent);
+                }
+
+                JObject apiResult;
+                try
+                {
+                    apiResult = JsonConvert.DeserializeObject<JObject>(responseBody);
+                }
+                catch (JsonException jsonEx)
+                {
+                    ErrorLogger.LogWarning("Invalid JSON response from API", $"Username: {username}, Response: {responseBody?.Substring(0, Math.Min(200, responseBody?.Length ?? 0))}");
+                    return HandleApiFailure(username, passwordHash, $"Invalid API response: {jsonEx.Message}", ipAddress, userAgent);
+                }
+
+                // Handle null deserialization result
+                if (apiResult == null)
+                {
+                    ErrorLogger.LogWarning("API returned null result", $"Username: {username}");
+                    return HandleApiFailure(username, passwordHash, "API returned null", ipAddress, userAgent);
+                }
 
                 if (response.IsSuccessStatusCode && apiResult["success"]?.Value<bool>() == true)
                 {
