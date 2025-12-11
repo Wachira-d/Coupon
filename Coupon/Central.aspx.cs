@@ -99,14 +99,15 @@ namespace Coupon
 
                         // Generate barcode
                         System.Drawing.Image img;
-                        string basePath = SecureConfig.GetBarcodePath();
 
-                        // IMPORTANT: If basePath doesn't already end with "Barcode", add it
-                        // because Image URL uses "./Barcode/" prefix
-                        string barcodePath = basePath;
-                        if (!basePath.EndsWith("Barcode", StringComparison.OrdinalIgnoreCase))
+                        // Use Server.MapPath to get physical path relative to web app
+                        // This ensures it works correctly regardless of deployment location
+                        string barcodePath = Server.MapPath("~/Barcode");
+
+                        // Create directory if it doesn't exist
+                        if (!System.IO.Directory.Exists(barcodePath))
                         {
-                            barcodePath = System.IO.Path.Combine(basePath, "Barcode");
+                            System.IO.Directory.CreateDirectory(barcodePath);
                         }
 
                         // SECURITY: Validate path to prevent directory traversal
@@ -128,7 +129,7 @@ namespace Coupon
                         }
 
                         GetBarcode(140, 450, BarcodeLib.TYPE.CODE128, barcodeValue, out img, path);
-                        Image1.ImageUrl = "./Barcode/" + id + ".jpg";
+                        Image1.ImageUrl = ResolveUrl("~/Barcode/" + id + ".jpg");
                         Image1.DataBind();
 
                         Panel1.Visible = false;
