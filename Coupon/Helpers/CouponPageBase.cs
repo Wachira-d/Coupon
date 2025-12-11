@@ -138,11 +138,16 @@ namespace Coupon.Helpers
 
                 // Generate barcode
                 System.Drawing.Image img;
-                string basePath = ConfigurationManager.AppSettings["Path"];
 
-                // IMPORTANT: Barcode images must be saved in Barcode subfolder
-                // because Image URL uses "./Barcode/" prefix
-                string barcodePath = System.IO.Path.Combine(basePath, "Barcode");
+                // Use Server.MapPath to get physical path relative to web app
+                // This ensures it works correctly regardless of deployment location
+                string barcodePath = Server.MapPath("~/Barcode");
+
+                // Create directory if it doesn't exist
+                if (!System.IO.Directory.Exists(barcodePath))
+                {
+                    System.IO.Directory.CreateDirectory(barcodePath);
+                }
 
                 // SECURITY: Validate path
                 if (!InputValidator.IsSafeFilePath(id))
@@ -163,7 +168,7 @@ namespace Coupon.Helpers
                 }
 
                 GetBarcode(140, 450, BarcodeLib.TYPE.CODE128, barcodeValue, out img, path);
-                image1.ImageUrl = "./Barcode/" + id + ".jpg";
+                image1.ImageUrl = ResolveUrl("~/Barcode/" + id + ".jpg");
                 image1.DataBind();
 
                 panel1.Visible = false;
