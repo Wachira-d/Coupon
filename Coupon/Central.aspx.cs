@@ -204,7 +204,7 @@ namespace Coupon
                     // Coupon is valid - date display logic (currently commented out in original)
                     string Month = expireDate.Month.ToString().PadLeft(2, '0');
                     Month = GetThaiMonth(Month);
-                    string year = (expireDate.Year + 543).ToString();
+                    string year = expireDate.Year.ToString(); // Use CE (Christian Era) year
                     // Label1.Text = expireDate.Day + " " + Month + " " + year;
                     // Label2.Text = expireDate.Day + " " + Month + " " + year;
                 }

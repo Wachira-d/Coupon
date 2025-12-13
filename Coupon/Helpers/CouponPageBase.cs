@@ -246,7 +246,7 @@ namespace Coupon.Helpers
                     // Coupon is valid - display expiration date
                     string Month = expireDate.Month.ToString().PadLeft(2, '0');
                     Month = GetThaiMonth(Month);
-                    string year = (expireDate.Year + 543).ToString();
+                    string year = expireDate.Year.ToString(); // Use CE (Christian Era) year
                     string displayDate = $"{expireDate.Day} {Month} {year}";
 
                     // Set date labels if provided

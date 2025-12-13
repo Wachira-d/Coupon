@@ -482,7 +482,9 @@ namespace Coupon.Admin
                 string columnID = autoGenerateId ? null : ddlColumnID.SelectedValue;
                 string columnCode = ddlColumnCode.SelectedValue;
                 string value = txtValue.Text.Trim();
-                DateTime expireDate = DateTime.Parse(txtExpireDate.Text);
+                // Parse expire date and normalize to CE (Christian Era)
+                // If user entered BE year (e.g., 2568), convert to CE (e.g., 2025)
+                DateTime expireDate = DateHelper.ParseAndNormalize(txtExpireDate.Text);
                 string description = txtDescription.Text.Trim();
 
                 // Import data

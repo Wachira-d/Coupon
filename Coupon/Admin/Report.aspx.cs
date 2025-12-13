@@ -213,37 +213,38 @@ namespace Coupon.Admin
                     parameters.Add(_dbHelper.CreateParameter("@code", "%" + InputValidator.SanitizeInput(txtCouponCode.Text) + "%"));
                 }
 
-                if (!string.IsNullOrWhiteSpace(txtRegisterFrom.Text) && DateTime.TryParse(txtRegisterFrom.Text, out DateTime regFrom))
+                // Normalize date inputs to CE (Christian Era) - if user enters BE year, convert to CE
+                if (!string.IsNullOrWhiteSpace(txtRegisterFrom.Text) && DateHelper.TryParseAndNormalize(txtRegisterFrom.Text, out DateTime regFrom))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Date_DataIn")} >= @regFrom";
                     parameters.Add(_dbHelper.CreateParameter("@regFrom", regFrom.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(txtRegisterTo.Text) && DateTime.TryParse(txtRegisterTo.Text, out DateTime regTo))
+                if (!string.IsNullOrWhiteSpace(txtRegisterTo.Text) && DateHelper.TryParseAndNormalize(txtRegisterTo.Text, out DateTime regTo))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Date_DataIn")} <= @regTo";
                     parameters.Add(_dbHelper.CreateParameter("@regTo", regTo.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(txtSendFrom.Text) && DateTime.TryParse(txtSendFrom.Text, out DateTime sendFrom))
+                if (!string.IsNullOrWhiteSpace(txtSendFrom.Text) && DateHelper.TryParseAndNormalize(txtSendFrom.Text, out DateTime sendFrom))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Date_Send")} >= @sendFrom";
                     parameters.Add(_dbHelper.CreateParameter("@sendFrom", sendFrom.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(txtSendTo.Text) && DateTime.TryParse(txtSendTo.Text, out DateTime sendTo))
+                if (!string.IsNullOrWhiteSpace(txtSendTo.Text) && DateHelper.TryParseAndNormalize(txtSendTo.Text, out DateTime sendTo))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Date_Send")} <= @sendTo";
                     parameters.Add(_dbHelper.CreateParameter("@sendTo", sendTo.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(txtUsedFrom.Text) && DateTime.TryParse(txtUsedFrom.Text, out DateTime useFrom))
+                if (!string.IsNullOrWhiteSpace(txtUsedFrom.Text) && DateHelper.TryParseAndNormalize(txtUsedFrom.Text, out DateTime useFrom))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Date_Use")} >= @useFrom";
                     parameters.Add(_dbHelper.CreateParameter("@useFrom", useFrom.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(txtUsedTo.Text) && DateTime.TryParse(txtUsedTo.Text, out DateTime useTo))
+                if (!string.IsNullOrWhiteSpace(txtUsedTo.Text) && DateHelper.TryParseAndNormalize(txtUsedTo.Text, out DateTime useTo))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Date_Use")} <= @useTo";
                     parameters.Add(_dbHelper.CreateParameter("@useTo", useTo.ToString("yyyy-MM-dd")));
@@ -338,13 +339,13 @@ namespace Coupon.Admin
                     parameters.Add(_dbHelper.CreateParameter("@redeem", "%Redeem%"));
                 }
 
-                if (!string.IsNullOrWhiteSpace(txtLogFrom.Text) && DateTime.TryParse(txtLogFrom.Text, out DateTime logFrom))
+                if (!string.IsNullOrWhiteSpace(txtLogFrom.Text) && DateHelper.TryParseAndNormalize(txtLogFrom.Text, out DateTime logFrom))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Created_DateTime")} >= @logFrom";
                     parameters.Add(_dbHelper.CreateParameter("@logFrom", logFrom.ToString("yyyy-MM-dd")));
                 }
 
-                if (!string.IsNullOrWhiteSpace(txtLogTo.Text) && DateTime.TryParse(txtLogTo.Text, out DateTime logTo))
+                if (!string.IsNullOrWhiteSpace(txtLogTo.Text) && DateHelper.TryParseAndNormalize(txtLogTo.Text, out DateTime logTo))
                 {
                     query += $" AND {_dbHelper.GetColumnName("Created_DateTime")} <= @logTo";
                     parameters.Add(_dbHelper.CreateParameter("@logTo", logTo.ToString("yyyy-MM-dd")));
