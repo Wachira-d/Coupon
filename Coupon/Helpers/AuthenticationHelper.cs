@@ -291,16 +291,33 @@ namespace Coupon.Helpers
                     };
                 }
             }
+            catch (AggregateException aggEx) when (aggEx.InnerException is TaskCanceledException)
+            {
+                // Timeout - .Result wraps TaskCanceledException in AggregateException
+                ErrorLogger.LogWarning("API timeout during authentication",
+                    $"Username: {username}, Timeout: {API_TIMEOUT_SECONDS}s, URL: {API_BASE_URL}");
+                return HandleApiFailure(username, passwordHash, $"API timeout ({API_TIMEOUT_SECONDS}s)", ipAddress, userAgent);
+            }
             catch (TaskCanceledException)
             {
-                // Timeout - Try cache fallback
-                ErrorLogger.LogWarning("API timeout during authentication", $"Username: {username}");
-                return HandleApiFailure(username, passwordHash, "API timeout", ipAddress, userAgent);
+                // Timeout - direct async catch
+                ErrorLogger.LogWarning("API timeout during authentication",
+                    $"Username: {username}, Timeout: {API_TIMEOUT_SECONDS}s, URL: {API_BASE_URL}");
+                return HandleApiFailure(username, passwordHash, $"API timeout ({API_TIMEOUT_SECONDS}s)", ipAddress, userAgent);
+            }
+            catch (AggregateException aggEx)
+            {
+                // Other aggregated errors (e.g., connection refused, DNS failure)
+                var innerEx = aggEx.InnerException ?? aggEx;
+                ErrorLogger.LogError("API connection error during authentication", innerEx,
+                    $"Username: {username}, URL: {API_BASE_URL}");
+                return HandleApiFailure(username, passwordHash, innerEx.Message, ipAddress, userAgent);
             }
             catch (Exception ex)
             {
                 // API Error - Try cache fallback
-                ErrorLogger.LogError("API error during authentication", ex, $"Username: {username}");
+                ErrorLogger.LogError("API error during authentication", ex,
+                    $"Username: {username}, URL: {API_BASE_URL}");
                 return HandleApiFailure(username, passwordHash, ex.Message, ipAddress, userAgent);
             }
         }
