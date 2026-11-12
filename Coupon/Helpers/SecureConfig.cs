@@ -205,7 +205,10 @@ namespace Coupon.Helpers
         /// </summary>
         public static string GetBarcodePath()
         {
-            return GetConfigValue("Path") ?? GetConfigValue("BARCODE_PATH") ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Barcode");
+            // Do NOT read the "Path" key: GetConfigValue checks environment variables first,
+            // and on Windows "Path" resolves to the system PATH variable (a ';'-separated list),
+            // which is not a valid directory. Pages write barcodes to ~/Barcode via Server.MapPath.
+            return GetConfigValue("BARCODE_PATH") ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Barcode");
         }
 
         /// <summary>
