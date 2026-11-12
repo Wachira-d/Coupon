@@ -53,7 +53,7 @@ namespace Coupon.Helpers
                 ErrorLogger.LogInfo($"{BrandName} processing coupon", $"ID: {id}");
 
                 // SECURITY: Validate coupon ID format
-                int expectedLength = Convert.ToInt32(ConfigurationManager.AppSettings["NumberofCode"] ?? "4");
+                int expectedLength = SettingsHelper.CouponIdLength;
                 if (!InputValidator.IsValidCouponId(id, expectedLength))
                 {
                     ErrorLogger.LogWarning($"Invalid coupon ID format on {BrandName}", $"ID: {id}, IP: {Request.UserHostAddress}");

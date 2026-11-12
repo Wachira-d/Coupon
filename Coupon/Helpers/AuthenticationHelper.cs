@@ -3,6 +3,7 @@ using System.Data;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Configuration;
 using Newtonsoft.Json;
@@ -19,21 +20,27 @@ namespace Coupon.Helpers
         private static readonly HttpClient _httpClient = new HttpClient();
         private static readonly DatabaseHelper _dbHelper = new DatabaseHelper();
 
-        // Configuration
-        private static readonly string API_BASE_URL = ConfigurationManager.AppSettings["AuthenApiBaseUrl"] ?? "https://authen-api.com/api";
-        private static readonly string API_KEY = ConfigurationManager.AppSettings["AuthenApiKey"] ?? "";
-        private static readonly int API_TIMEOUT_SECONDS = int.Parse(ConfigurationManager.AppSettings["AuthenApiTimeout"] ?? "30");
-        private static readonly int CACHE_DURATION_DAYS = int.Parse(ConfigurationManager.AppSettings["CacheDurationDays"] ?? "90");
+        // Configuration - editable on Admin/Settings.aspx (database), falls back to Web.config
+        private static string ApiBaseUrl => SettingsHelper.Get(SettingsHelper.KeyApiBaseUrl) ?? "https://authen-api.com/api";
+        private static string ApiKey => SettingsHelper.Get(SettingsHelper.KeyApiKey) ?? "";
+        private static int ApiTimeoutSeconds => SettingsHelper.GetInt(SettingsHelper.KeyApiTimeout, 30);
+        private static int CacheDurationDays => SettingsHelper.GetInt(SettingsHelper.KeyCacheDurationDays, 90);
+        private static int LockoutDurationMinutes => SettingsHelper.GetInt(SettingsHelper.KeyLockoutDurationMinutes, 15);
+
+        // Not editable from the web: changing the salt invalidates every cached password
         private static readonly string PASSWORD_SALT = ConfigurationManager.AppSettings["PasswordSalt"] ?? "HondaCX_2024_Salt";
-        private static readonly int MAX_FAILED_ATTEMPTS = int.Parse(ConfigurationManager.AppSettings["MaxFailedAttempts"] ?? "5");
-        private static readonly int LOCKOUT_DURATION_MINUTES = int.Parse(ConfigurationManager.AppSettings["LockoutDurationMinutes"] ?? "15");
 
         static AuthenticationHelper()
         {
-            // Ensure BaseAddress ends with / for proper relative URL resolution
-            string baseUrl = API_BASE_URL.TrimEnd('/') + "/";
-            _httpClient.BaseAddress = new Uri(baseUrl);
-            _httpClient.Timeout = TimeSpan.FromSeconds(API_TIMEOUT_SECONDS);
+            // URL and timeout are applied per request (absolute URL + CancellationToken)
+            // so they can be changed from the Settings page without restarting the app.
+            // HttpClient.BaseAddress/Timeout cannot be changed after the first request.
+            _httpClient.Timeout = Timeout.InfiniteTimeSpan;
+        }
+
+        private static string BuildApiUrl(string relativePath)
+        {
+            return ApiBaseUrl.TrimEnd('/') + "/" + relativePath.TrimStart('/');
         }
 
         /// <summary>
@@ -65,13 +72,13 @@ namespace Coupon.Helpers
                 {
                     // Check if lockout period has expired
                     if (cachedUser.LastFailedLogin.HasValue &&
-                        DateTime.Now.Subtract(cachedUser.LastFailedLogin.Value).TotalMinutes < LOCKOUT_DURATION_MINUTES)
+                        DateTime.Now.Subtract(cachedUser.LastFailedLogin.Value).TotalMinutes < LockoutDurationMinutes)
                     {
                         LogLoginAttempt(username, false, "lockout", "Account temporarily locked", ipAddress, userAgent);
                         return new AuthResult
                         {
                             Success = false,
-                            Message = $"Account is temporarily locked. Please try again in {LOCKOUT_DURATION_MINUTES} minutes.",
+                            Message = $"Account is temporarily locked. Please try again in {LockoutDurationMinutes} minutes.",
                             AuthSource = "lockout"
                         };
                     }
@@ -105,6 +112,22 @@ namespace Coupon.Helpers
                 {
                     // Case 4: Valid cache & matching password - Authenticate locally
                     result = AuthenticateFromCache(cachedUser, ipAddress, userAgent);
+                }
+
+                // AUTHORIZATION: only accounts in the allowed admin list (Admin/Settings.aspx) may sign in.
+                // Checked after the password is verified, so it is not counted as a failed password attempt.
+                if (result.Success && !SettingsHelper.IsAdminAllowed(username, result.User?.Username, result.User?.Email))
+                {
+                    LogLoginAttempt(username, false, "authorization", "Account is not in the allowed admin list", ipAddress, userAgent);
+                    ErrorLogger.LogWarning("Login denied: account is not in the allowed admin list",
+                        $"Username: {username}, AD account: {result.User?.Username}, Email: {result.User?.Email}");
+
+                    return new AuthResult
+                    {
+                        Success = false,
+                        Message = "This account is not allowed to access the admin area. Please contact the system administrator.",
+                        AuthSource = "authorization"
+                    };
                 }
 
                 // Handle failed login
@@ -210,20 +233,26 @@ namespace Coupon.Helpers
                 string json = JsonConvert.SerializeObject(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                // Create request with API Key header (no leading / for proper URL resolution)
-                var request = new HttpRequestMessage(HttpMethod.Post, "ldap/authenticate")
+                // Absolute URL built from the current setting (can be changed on the Settings page)
+                var request = new HttpRequestMessage(HttpMethod.Post, BuildApiUrl("ldap/authenticate"))
                 {
                     Content = content
                 };
 
                 // Add X-API-Key header if configured
-                if (!string.IsNullOrEmpty(API_KEY))
+                string apiKey = ApiKey;
+                if (!string.IsNullOrEmpty(apiKey))
                 {
-                    request.Headers.Add("X-API-Key", API_KEY);
+                    request.Headers.Add("X-API-Key", apiKey);
                 }
 
-                var response = _httpClient.SendAsync(request).Result;
-                string responseBody = response.Content.ReadAsStringAsync().Result;
+                HttpResponseMessage response;
+                string responseBody;
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(ApiTimeoutSeconds)))
+                {
+                    response = _httpClient.SendAsync(request, cts.Token).Result;
+                    responseBody = response.Content.ReadAsStringAsync().Result;
+                }
 
                 // Handle null or empty response
                 if (string.IsNullOrWhiteSpace(responseBody))
@@ -240,7 +269,7 @@ namespace Coupon.Helpers
                 catch (JsonException jsonEx)
                 {
                     ErrorLogger.LogWarning("Invalid JSON response from API",
-                        $"Username: {username}, StatusCode: {(int)response.StatusCode} {response.StatusCode}, URL: {API_BASE_URL}, Response: {responseBody?.Substring(0, Math.Min(200, responseBody?.Length ?? 0))}");
+                        $"Username: {username}, StatusCode: {(int)response.StatusCode} {response.StatusCode}, URL: {ApiBaseUrl}, Response: {responseBody?.Substring(0, Math.Min(200, responseBody?.Length ?? 0))}");
                     return HandleApiFailure(username, passwordHash, $"Invalid API response: {jsonEx.Message}", ipAddress, userAgent);
                 }
 
@@ -296,29 +325,29 @@ namespace Coupon.Helpers
             {
                 // Timeout - .Result wraps TaskCanceledException in AggregateException
                 ErrorLogger.LogWarning("API timeout during authentication",
-                    $"Username: {username}, Timeout: {API_TIMEOUT_SECONDS}s, URL: {API_BASE_URL}");
-                return HandleApiFailure(username, passwordHash, $"API timeout ({API_TIMEOUT_SECONDS}s)", ipAddress, userAgent);
+                    $"Username: {username}, Timeout: {ApiTimeoutSeconds}s, URL: {ApiBaseUrl}");
+                return HandleApiFailure(username, passwordHash, $"API timeout ({ApiTimeoutSeconds}s)", ipAddress, userAgent);
             }
             catch (TaskCanceledException)
             {
                 // Timeout - direct async catch
                 ErrorLogger.LogWarning("API timeout during authentication",
-                    $"Username: {username}, Timeout: {API_TIMEOUT_SECONDS}s, URL: {API_BASE_URL}");
-                return HandleApiFailure(username, passwordHash, $"API timeout ({API_TIMEOUT_SECONDS}s)", ipAddress, userAgent);
+                    $"Username: {username}, Timeout: {ApiTimeoutSeconds}s, URL: {ApiBaseUrl}");
+                return HandleApiFailure(username, passwordHash, $"API timeout ({ApiTimeoutSeconds}s)", ipAddress, userAgent);
             }
             catch (AggregateException aggEx)
             {
                 // Other aggregated errors (e.g., connection refused, DNS failure)
                 var innerEx = aggEx.InnerException ?? aggEx;
                 ErrorLogger.LogError("API connection error during authentication", innerEx,
-                    $"Username: {username}, URL: {API_BASE_URL}");
+                    $"Username: {username}, URL: {ApiBaseUrl}");
                 return HandleApiFailure(username, passwordHash, innerEx.Message, ipAddress, userAgent);
             }
             catch (Exception ex)
             {
                 // API Error - Try cache fallback
                 ErrorLogger.LogError("API error during authentication", ex,
-                    $"Username: {username}, URL: {API_BASE_URL}");
+                    $"Username: {username}, URL: {ApiBaseUrl}");
                 return HandleApiFailure(username, passwordHash, ex.Message, ipAddress, userAgent);
             }
         }
@@ -400,7 +429,7 @@ namespace Coupon.Helpers
                     _dbHelper.CreateParameter("@employeeId", userData["employeeId"]?.ToString() ?? (object)DBNull.Value),
                     _dbHelper.CreateParameter("@groups", groups),
                     _dbHelper.CreateParameter("@isEnabled", userData["isEnabled"]?.Value<bool>() ?? true),
-                    _dbHelper.CreateParameter("@cacheDurationDays", CACHE_DURATION_DAYS)
+                    _dbHelper.CreateParameter("@cacheDurationDays", CacheDurationDays)
                 };
 
                 _dbHelper.ExecuteNonQuery(query, parameters);
@@ -538,7 +567,7 @@ namespace Coupon.Helpers
             if (session["LoginTime"] != null)
             {
                 DateTime loginTime = (DateTime)session["LoginTime"];
-                int sessionTimeoutHours = int.Parse(ConfigurationManager.AppSettings["SessionTimeoutHours"] ?? "8");
+                int sessionTimeoutHours = SettingsHelper.GetInt(SettingsHelper.KeySessionTimeoutHours, 8);
 
                 if (DateTime.Now.Subtract(loginTime).TotalHours > sessionTimeoutHours)
                 {
@@ -546,7 +575,78 @@ namespace Coupon.Helpers
                 }
             }
 
+            // AUTHORIZATION: end the session if the account was removed or disabled in the admin list
+            if (!SettingsHelper.IsAdminAllowed(
+                    session["LoginName"]?.ToString(),
+                    session["Username"]?.ToString(),
+                    session["Email"]?.ToString()))
+            {
+                return false;
+            }
+
             return true;
+        }
+
+        /// <summary>
+        /// Test the connection to AuthenAPI with the current settings (used by Admin/Settings.aspx).
+        /// Sends empty credentials, so no real account is checked against AD.
+        /// </summary>
+        public static ApiTestResult TestApiConnection()
+        {
+            var result = new ApiTestResult { Url = BuildApiUrl("ldap/authenticate"), TimeoutSeconds = ApiTimeoutSeconds };
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, result.Url)
+                {
+                    Content = new StringContent("{\"username\":\"\",\"password\":\"\"}", Encoding.UTF8, "application/json")
+                };
+
+                string apiKey = ApiKey;
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    request.Headers.Add("X-API-Key", apiKey);
+                }
+
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(result.TimeoutSeconds)))
+                {
+                    HttpResponseMessage response = _httpClient.SendAsync(request, cts.Token).Result;
+                    string body = response.Content.ReadAsStringAsync().Result ?? "";
+
+                    result.Reachable = true;
+                    result.StatusCode = (int)response.StatusCode;
+                    result.StatusText = response.StatusCode.ToString();
+                    result.BodyPreview = body.Length > 500 ? body.Substring(0, 500) : body;
+
+                    try
+                    {
+                        JToken.Parse(body);
+                        result.IsJson = true;
+                    }
+                    catch
+                    {
+                        result.IsJson = false;
+                    }
+                }
+            }
+            catch (AggregateException ex) when (ex.InnerException is TaskCanceledException)
+            {
+                result.Error = $"Timeout: no response within {result.TimeoutSeconds} seconds";
+            }
+            catch (AggregateException ex)
+            {
+                Exception inner = ex.GetBaseException();
+                result.Error = $"{inner.GetType().Name}: {inner.Message}";
+            }
+            catch (Exception ex)
+            {
+                result.Error = $"{ex.GetType().Name}: {ex.Message}";
+            }
+
+            stopwatch.Stop();
+            result.ElapsedMs = stopwatch.ElapsedMilliseconds;
+            return result;
         }
 
         /// <summary>
@@ -586,6 +686,22 @@ namespace Coupon.Helpers
             session["AuthSource"] = user.AuthSource;
             session["LoginTime"] = DateTime.Now;
         }
+    }
+
+    /// <summary>
+    /// Result of AuthenticationHelper.TestApiConnection
+    /// </summary>
+    public class ApiTestResult
+    {
+        public string Url { get; set; }
+        public int TimeoutSeconds { get; set; }
+        public bool Reachable { get; set; }
+        public int StatusCode { get; set; }
+        public string StatusText { get; set; }
+        public bool IsJson { get; set; }
+        public string BodyPreview { get; set; }
+        public string Error { get; set; }
+        public long ElapsedMs { get; set; }
     }
 
     /// <summary>

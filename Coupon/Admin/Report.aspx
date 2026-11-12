@@ -368,6 +368,7 @@
             </div>
             <div class="nav-buttons">
                 <a href="<%= ResolveUrl("~/Admin/ImportCoupons.aspx") %>">Import Coupons</a>
+                <a href="<%= ResolveUrl("~/Admin/Settings.aspx") %>">Settings</a>
                 <a href="<%= ResolveUrl("~/Admin/Logout.aspx") %>">Logout</a>
             </div>
         </div>

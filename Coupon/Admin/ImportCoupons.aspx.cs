@@ -20,7 +20,8 @@ namespace Coupon.Admin
         // Random ID generation (matching old ImportCode application)
         private static readonly Random _random = new Random();
         private static readonly string ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        private static readonly int SHORT_URL_DIGIT = int.Parse(ConfigurationManager.AppSettings["ShortUrlDigit"] ?? "8");
+        // Must match the length the redemption pages accept (Settings page: "Coupon ID length", key NumberofCode)
+        private static int SHORT_URL_DIGIT => SettingsHelper.CouponIdLength;
 
         protected void Page_Load(object sender, EventArgs e)
         {

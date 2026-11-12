@@ -58,6 +58,7 @@ namespace Coupon.Admin
                 if (result.Success)
                 {
                     // Create session
+                    Session["LoginName"] = username.ToLowerInvariant(); // name typed at login, used for the admin-list check
                     Session["Username"] = result.User.Username;
                     Session["DisplayName"] = result.User.DisplayName;
                     Session["Email"] = result.User.Email;
