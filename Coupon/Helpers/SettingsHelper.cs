@@ -65,6 +65,16 @@ namespace Coupon.Helpers
         public const string KeyCacheDurationDays = "CacheDurationDays";
         public const string KeyCouponIdLength = "NumberofCode";
 
+        // Email Relay API (https://github.com/Wachira-d/EmailRelayAPI)
+        public const string KeyRelayEnabled = "EmailRelayEnabled";
+        public const string KeyRelayBaseUrl = "EmailRelayBaseUrl";
+        public const string KeyRelayApiKey = "EmailRelayApiKey";
+        public const string KeyRelaySigningSecret = "EmailRelaySigningSecret";
+        public const string KeyRelayFromAddress = "EmailRelayFromAddress";
+        public const string KeyRelayFromName = "EmailRelayFromName";
+        public const string KeyRelaySenderProfile = "EmailRelaySenderProfile";
+        public const string KeyRelayTimeout = "EmailRelayTimeout";
+
         public const string SourceDatabase = "Database";
         public const string SourceWebConfig = "Web.config";
         public const string SourceDefault = "Default";
@@ -95,7 +105,15 @@ namespace Coupon.Helpers
             new SettingDefinition { Key = KeySessionTimeoutHours, Label = "Admin session timeout (hours)", Type = SettingType.Integer, DefaultValue = "8", Min = 1, Max = 24 },
             new SettingDefinition { Key = KeyLockoutDurationMinutes, Label = "Account lockout duration (minutes)", Type = SettingType.Integer, DefaultValue = "15", Min = 1, Max = 1440 },
             new SettingDefinition { Key = KeyCacheDurationDays, Label = "Login cache duration (days)", Type = SettingType.Integer, DefaultValue = "90", Min = 1, Max = 365 },
-            new SettingDefinition { Key = KeyCouponIdLength, Label = "Coupon ID length", Type = SettingType.Integer, DefaultValue = "4", Min = 4, Max = 32 }
+            new SettingDefinition { Key = KeyCouponIdLength, Label = "Coupon ID length", Type = SettingType.Integer, DefaultValue = "4", Min = 4, Max = 32 },
+            new SettingDefinition { Key = KeyRelayEnabled, Label = "Email Relay enabled", Type = SettingType.Boolean, DefaultValue = "false" },
+            new SettingDefinition { Key = KeyRelayBaseUrl, Label = "Email Relay Base URL", Type = SettingType.Text, DefaultValue = "" },
+            new SettingDefinition { Key = KeyRelayApiKey, Label = "Email Relay API Key", Type = SettingType.Secret, DefaultValue = "" },
+            new SettingDefinition { Key = KeyRelaySigningSecret, Label = "Email Relay signing secret", Type = SettingType.Secret, DefaultValue = "" },
+            new SettingDefinition { Key = KeyRelayFromAddress, Label = "From address", Type = SettingType.Text, DefaultValue = "" },
+            new SettingDefinition { Key = KeyRelayFromName, Label = "From name", Type = SettingType.Text, DefaultValue = "" },
+            new SettingDefinition { Key = KeyRelaySenderProfile, Label = "Sender profile", Type = SettingType.Text, DefaultValue = "" },
+            new SettingDefinition { Key = KeyRelayTimeout, Label = "Email Relay timeout (seconds)", Type = SettingType.Integer, DefaultValue = "30", Min = 5, Max = 120 }
         }.AsReadOnly();
 
         #region Settings

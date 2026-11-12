@@ -28,6 +28,23 @@ namespace Coupon.Admin
         protected global::System.Web.UI.WebControls.TextBox txtSessionHours;
         protected global::System.Web.UI.WebControls.TextBox txtLockoutMinutes;
         protected global::System.Web.UI.WebControls.TextBox txtCacheDays;
+        protected global::System.Web.UI.WebControls.CheckBox chkRelayEnabled;
+        protected global::System.Web.UI.WebControls.TextBox txtRelayUrl;
+        protected global::System.Web.UI.WebControls.TextBox txtRelayKey;
+        protected global::System.Web.UI.WebControls.Literal litRelayKeyStatus;
+        protected global::System.Web.UI.WebControls.CheckBox chkClearRelayKey;
+        protected global::System.Web.UI.WebControls.TextBox txtRelaySecret;
+        protected global::System.Web.UI.WebControls.Literal litRelaySecretStatus;
+        protected global::System.Web.UI.WebControls.CheckBox chkClearRelaySecret;
+        protected global::System.Web.UI.WebControls.TextBox txtRelayFrom;
+        protected global::System.Web.UI.WebControls.TextBox txtRelayFromName;
+        protected global::System.Web.UI.WebControls.TextBox txtRelayProfile;
+        protected global::System.Web.UI.WebControls.TextBox txtRelayTimeout;
+        protected global::System.Web.UI.WebControls.Button btnTestRelay;
+        protected global::System.Web.UI.WebControls.TextBox txtTestEmailTo;
+        protected global::System.Web.UI.WebControls.Button btnSendTestEmail;
+        protected global::System.Web.UI.WebControls.Literal litRelayTest;
+
         protected global::System.Web.UI.WebControls.TextBox txtCouponIdLength;
         protected global::System.Web.UI.WebControls.Button btnSaveSettings;
 

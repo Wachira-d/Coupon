@@ -161,6 +161,91 @@
             </div>
         </div>
 
+        <!-- ===================== Email Relay API ===================== -->
+        <div class="panel">
+            <h5>Email Relay API</h5>
+            <p class="hint">ส่งอีเมลผ่าน EmailRelayAPI (ดูค่า API Key / Sender profile ได้จาก console ของ relay ที่ /admin/)</p>
+
+            <div class="setting-row">
+                <div>
+                    <label>Enable Email Relay <span class="source <%= SourceOf("EmailRelayEnabled") %>"><%= SourceOf("EmailRelayEnabled") %></span></label>
+                    <div class="desc">ปิดไว้ = ระบบจะไม่ส่งอีเมลใดๆ</div>
+                </div>
+                <div style="padding-top:8px;"><asp:CheckBox ID="chkRelayEnabled" runat="server" Text=" เปิดใช้งาน" /></div>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <label for="<%= txtRelayUrl.ClientID %>">Relay Base URL <span class="source <%= SourceOf("EmailRelayBaseUrl") %>"><%= SourceOf("EmailRelayBaseUrl") %></span></label>
+                    <div class="desc">ไม่ต้องใส่ /api/v1 เช่น https://relay.hondacx.me</div>
+                </div>
+                <div><asp:TextBox ID="txtRelayUrl" runat="server" MaxLength="300" /></div>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <label for="<%= txtRelayKey.ClientID %>">API Key (X-API-Key) <span class="source <%= SourceOf("EmailRelayApiKey") %>"><%= SourceOf("EmailRelayApiKey") %></span></label>
+                    <div class="desc">key ของ client (erk_...) ต้องมี scope <code>send</code> และ <code>read</code> ถ้าจะใช้ปุ่ม Test Connection</div>
+                </div>
+                <div>
+                    <asp:TextBox ID="txtRelayKey" runat="server" TextMode="Password" MaxLength="500" autocomplete="new-password" />
+                    <div class="desc"><asp:Literal ID="litRelayKeyStatus" runat="server" /></div>
+                    <div class="desc"><asp:CheckBox ID="chkClearRelayKey" runat="server" Text=" ลบ API Key ที่บันทึกบนเว็บ" /></div>
+                </div>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <label for="<%= txtRelaySecret.ClientID %>">Signing secret (optional) <span class="source <%= SourceOf("EmailRelaySigningSecret") %>"><%= SourceOf("EmailRelaySigningSecret") %></span></label>
+                    <div class="desc">ใส่เฉพาะเมื่อ client เปิด "Require signed requests" ระบบจะส่ง X-Timestamp / X-Signature (HMAC-SHA256) ให้</div>
+                </div>
+                <div>
+                    <asp:TextBox ID="txtRelaySecret" runat="server" TextMode="Password" MaxLength="500" autocomplete="new-password" />
+                    <div class="desc"><asp:Literal ID="litRelaySecretStatus" runat="server" /></div>
+                    <div class="desc"><asp:CheckBox ID="chkClearRelaySecret" runat="server" Text=" ลบ signing secret ที่บันทึกบนเว็บ" /></div>
+                </div>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <label for="<%= txtRelayFrom.ClientID %>">From address (optional) <span class="source <%= SourceOf("EmailRelayFromAddress") %>"><%= SourceOf("EmailRelayFromAddress") %></span></label>
+                    <div class="desc">เว้นว่าง = ใช้ From ของ sender profile ถ้าใส่ ต้องอยู่ใน Allowed From ของ client</div>
+                </div>
+                <div><asp:TextBox ID="txtRelayFrom" runat="server" MaxLength="320" placeholder="noreply@hondacx.me" /></div>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <label for="<%= txtRelayFromName.ClientID %>">From name (optional) <span class="source <%= SourceOf("EmailRelayFromName") %>"><%= SourceOf("EmailRelayFromName") %></span></label>
+                </div>
+                <div><asp:TextBox ID="txtRelayFromName" runat="server" MaxLength="200" placeholder="Honda CX Coupon" /></div>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <label for="<%= txtRelayProfile.ClientID %>">Sender profile (optional) <span class="source <%= SourceOf("EmailRelaySenderProfile") %>"><%= SourceOf("EmailRelaySenderProfile") %></span></label>
+                    <div class="desc">เว้นว่าง = ใช้ profile ที่ผูกกับ client</div>
+                </div>
+                <div><asp:TextBox ID="txtRelayProfile" runat="server" MaxLength="100" /></div>
+            </div>
+
+            <div class="setting-row">
+                <div>
+                    <label for="<%= txtRelayTimeout.ClientID %>">Timeout (seconds) <span class="source <%= SourceOf("EmailRelayTimeout") %>"><%= SourceOf("EmailRelayTimeout") %></span></label>
+                    <div class="desc">5 - 120 วินาที</div>
+                </div>
+                <div><asp:TextBox ID="txtRelayTimeout" runat="server" CssClass="short" MaxLength="3" /></div>
+            </div>
+
+            <div class="actions">
+                <asp:Button ID="btnTestRelay" runat="server" Text="Test Connection" CssClass="btn-secondary-custom" OnClick="btnTestRelay_Click" CausesValidation="false" />
+                <asp:TextBox ID="txtTestEmailTo" runat="server" MaxLength="320" placeholder="ส่งอีเมลทดสอบไปที่..." style="padding:8px 12px; border:1px solid #ccc; border-radius:6px; width:260px; margin-right:8px;" />
+                <asp:Button ID="btnSendTestEmail" runat="server" Text="Send Test Email" CssClass="btn-secondary-custom" OnClick="btnSendTestEmail_Click" CausesValidation="false" />
+                <div class="desc" style="margin-top:6px;">ทดสอบด้วยค่าที่บันทึกแล้ว (กด Save Settings ก่อนถ้าเพิ่งแก้) Send Test Email ทำงานเมื่อเปิด Enable Email Relay แล้ว</div>
+            </div>
+            <div style="margin-top:15px;"><asp:Literal ID="litRelayTest" runat="server" /></div>
+        </div>
+
         <!-- ===================== Coupon ===================== -->
         <div class="panel">
             <h5>Coupon</h5>

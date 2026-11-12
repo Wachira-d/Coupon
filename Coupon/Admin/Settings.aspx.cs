@@ -6,6 +6,7 @@ using System.Web;
 using System.Web.UI;
 using System.Web.UI.WebControls;
 using Coupon.Helpers;
+using Newtonsoft.Json.Linq;
 
 namespace Coupon.Admin
 {
@@ -66,6 +67,57 @@ namespace Coupon.Admin
             txtLockoutMinutes.Text = SettingsHelper.GetInt(SettingsHelper.KeyLockoutDurationMinutes, 15).ToString();
             txtCacheDays.Text = SettingsHelper.GetInt(SettingsHelper.KeyCacheDurationDays, 90).ToString();
             txtCouponIdLength.Text = SettingsHelper.CouponIdLength.ToString();
+
+            // Email Relay API
+            chkRelayEnabled.Checked = SettingsHelper.GetBool(SettingsHelper.KeyRelayEnabled, false);
+            txtRelayUrl.Text = SettingsHelper.Get(SettingsHelper.KeyRelayBaseUrl) ?? "";
+            txtRelayKey.Text = "";
+            chkClearRelayKey.Checked = false;
+            litRelayKeyStatus.Text = SecretStatus(SettingsHelper.KeyRelayApiKey);
+            txtRelaySecret.Text = "";
+            chkClearRelaySecret.Checked = false;
+            litRelaySecretStatus.Text = SecretStatus(SettingsHelper.KeyRelaySigningSecret);
+            txtRelayFrom.Text = SettingsHelper.Get(SettingsHelper.KeyRelayFromAddress) ?? "";
+            txtRelayFromName.Text = SettingsHelper.Get(SettingsHelper.KeyRelayFromName) ?? "";
+            txtRelayProfile.Text = SettingsHelper.Get(SettingsHelper.KeyRelaySenderProfile) ?? "";
+            txtRelayTimeout.Text = SettingsHelper.GetInt(SettingsHelper.KeyRelayTimeout, 30).ToString();
+
+            if (string.IsNullOrEmpty(txtTestEmailTo.Text))
+            {
+                txtTestEmailTo.Text = Convert.ToString(Session["Email"]);
+            }
+        }
+
+        private string SecretStatus(string key)
+        {
+            return string.IsNullOrEmpty(SettingsHelper.Get(key))
+                ? "สถานะ: <strong>ยังไม่ได้ตั้งค่า</strong>"
+                : $"สถานะ: <strong>ตั้งค่าแล้ว</strong> (จาก {Server.HtmlEncode(SourceOf(key))})";
+        }
+
+        private static bool IsValidEmail(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length > 320)
+            {
+                return false;
+            }
+
+            try
+            {
+                var address = new System.Net.Mail.MailAddress(value.Trim());
+                return address.Address == value.Trim();
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+        }
+
+        private static bool IsValidHttpUrl(string value)
+        {
+            Uri parsed;
+            return Uri.TryCreate(value, UriKind.Absolute, out parsed) &&
+                   (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps);
         }
 
         protected void btnSaveSettings_Click(object sender, EventArgs e)
@@ -79,14 +131,30 @@ namespace Coupon.Admin
             var errors = new List<string>();
 
             string apiUrl = txtApiBaseUrl.Text.Trim();
-            if (apiUrl.Length > 0)
+            if (apiUrl.Length > 0 && !IsValidHttpUrl(apiUrl))
             {
-                Uri parsed;
-                if (!Uri.TryCreate(apiUrl, UriKind.Absolute, out parsed) ||
-                    (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
-                {
-                    errors.Add("API Base URL ต้องขึ้นต้นด้วย http:// หรือ https://");
-                }
+                errors.Add("API Base URL ต้องขึ้นต้นด้วย http:// หรือ https://");
+            }
+
+            string relayUrl = txtRelayUrl.Text.Trim().TrimEnd('/');
+            if (relayUrl.Length > 0 && !IsValidHttpUrl(relayUrl))
+            {
+                errors.Add("Relay Base URL ต้องขึ้นต้นด้วย http:// หรือ https://");
+            }
+            if (relayUrl.EndsWith("/api/v1", StringComparison.OrdinalIgnoreCase) || relayUrl.EndsWith("/api/v1/emails", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add("Relay Base URL ไม่ต้องใส่ /api/v1 (ระบบเติมให้เอง)");
+            }
+
+            string relayFrom = txtRelayFrom.Text.Trim();
+            if (relayFrom.Length > 0 && !IsValidEmail(relayFrom))
+            {
+                errors.Add("From address ไม่ใช่อีเมลที่ถูกต้อง");
+            }
+
+            if (chkRelayEnabled.Checked && relayUrl.Length == 0 && string.IsNullOrEmpty(ConfigValue(SettingsHelper.KeyRelayBaseUrl)))
+            {
+                errors.Add("เปิด Email Relay แล้วต้องใส่ Relay Base URL");
             }
 
             ValidateInt(txtApiTimeout, SettingsHelper.KeyApiTimeout, "API Timeout", errors);
@@ -94,6 +162,7 @@ namespace Coupon.Admin
             ValidateInt(txtLockoutMinutes, SettingsHelper.KeyLockoutDurationMinutes, "Lockout duration", errors);
             ValidateInt(txtCacheDays, SettingsHelper.KeyCacheDurationDays, "Login cache duration", errors);
             ValidateInt(txtCouponIdLength, SettingsHelper.KeyCouponIdLength, "Coupon ID length", errors);
+            ValidateInt(txtRelayTimeout, SettingsHelper.KeyRelayTimeout, "Email Relay timeout", errors);
 
             if (!chkRestrictAdmin.Checked && SettingsHelper.GetBool(SettingsHelper.KeyRestrictAdminAccess, true))
             {
@@ -114,27 +183,22 @@ namespace Coupon.Admin
             {
                 SaveIfChanged(SettingsHelper.KeyApiBaseUrl, apiUrl, by, changed);
 
-                // API key: only change when something was typed or "clear" was ticked
-                if (chkClearApiKey.Checked)
-                {
-                    if (SettingsHelper.HasDatabaseValue(SettingsHelper.KeyApiKey))
-                    {
-                        SettingsHelper.Remove(SettingsHelper.KeyApiKey);
-                        changed.Add(SettingsHelper.KeyApiKey + " (cleared)");
-                    }
-                }
-                else if (txtApiKey.Text.Trim().Length > 0)
-                {
-                    SettingsHelper.Save(SettingsHelper.KeyApiKey, txtApiKey.Text.Trim(), by);
-                    changed.Add(SettingsHelper.KeyApiKey);
-                }
-
+                SaveSecret(SettingsHelper.KeyApiKey, txtApiKey, chkClearApiKey, by, changed);
                 SaveIfChanged(SettingsHelper.KeyApiTimeout, txtApiTimeout.Text.Trim(), by, changed);
                 SaveBoolIfChanged(SettingsHelper.KeyRestrictAdminAccess, chkRestrictAdmin.Checked, by, changed);
                 SaveIfChanged(SettingsHelper.KeySessionTimeoutHours, txtSessionHours.Text.Trim(), by, changed);
                 SaveIfChanged(SettingsHelper.KeyLockoutDurationMinutes, txtLockoutMinutes.Text.Trim(), by, changed);
                 SaveIfChanged(SettingsHelper.KeyCacheDurationDays, txtCacheDays.Text.Trim(), by, changed);
                 SaveIfChanged(SettingsHelper.KeyCouponIdLength, txtCouponIdLength.Text.Trim(), by, changed);
+
+                SaveBoolIfChanged(SettingsHelper.KeyRelayEnabled, chkRelayEnabled.Checked, by, changed, false);
+                SaveIfChanged(SettingsHelper.KeyRelayBaseUrl, relayUrl, by, changed);
+                SaveSecret(SettingsHelper.KeyRelayApiKey, txtRelayKey, chkClearRelayKey, by, changed);
+                SaveSecret(SettingsHelper.KeyRelaySigningSecret, txtRelaySecret, chkClearRelaySecret, by, changed);
+                SaveIfChanged(SettingsHelper.KeyRelayFromAddress, relayFrom, by, changed);
+                SaveIfChanged(SettingsHelper.KeyRelayFromName, txtRelayFromName.Text.Trim(), by, changed);
+                SaveIfChanged(SettingsHelper.KeyRelaySenderProfile, txtRelayProfile.Text.Trim(), by, changed);
+                SaveIfChanged(SettingsHelper.KeyRelayTimeout, txtRelayTimeout.Text.Trim(), by, changed);
 
                 if (changed.Count > 0)
                 {
@@ -195,13 +259,36 @@ namespace Coupon.Admin
             }
         }
 
-        private static void SaveBoolIfChanged(string key, bool newValue, string by, List<string> changed)
+        private static void SaveBoolIfChanged(string key, bool newValue, string by, List<string> changed, bool defaultValue = true)
         {
-            if (newValue != SettingsHelper.GetBool(key, true))
+            if (newValue != SettingsHelper.GetBool(key, defaultValue))
             {
                 SettingsHelper.Save(key, newValue ? "true" : "false", by);
                 changed.Add(key);
             }
+        }
+
+        /// <summary>Secrets are never shown: change only when something was typed, or remove when "clear" is ticked</summary>
+        private static void SaveSecret(string key, TextBox box, CheckBox clear, string by, List<string> changed)
+        {
+            if (clear.Checked)
+            {
+                if (SettingsHelper.HasDatabaseValue(key))
+                {
+                    SettingsHelper.Remove(key);
+                    changed.Add(key + " (cleared)");
+                }
+            }
+            else if (box.Text.Trim().Length > 0)
+            {
+                SettingsHelper.Save(key, box.Text.Trim(), by);
+                changed.Add(key);
+            }
+        }
+
+        private static string ConfigValue(string key)
+        {
+            return System.Configuration.ConfigurationManager.AppSettings[key];
         }
 
         protected void btnTestApi_Click(object sender, EventArgs e)
@@ -251,6 +338,111 @@ namespace Coupon.Admin
 
             AuditLogger.LogAdminAction(CurrentUserName(), "Test Authen API", "Settings", GetClientIpAddress(),
                 string.IsNullOrEmpty(result.Error) ? $"HTTP {result.StatusCode}, {result.ElapsedMs} ms" : result.Error);
+        }
+
+        protected void btnTestRelay_Click(object sender, EventArgs e)
+        {
+            RelayResult result = EmailRelayHelper.TestConnection();
+
+            string css;
+            string summary;
+            var details = new StringBuilder();
+
+            if (result.Success)
+            {
+                css = "success";
+                summary = "เชื่อมต่อ Email Relay ได้ และ API Key ถูกต้อง";
+                JToken data = result.Data;
+                if (data != null && data.Type == JTokenType.Object)
+                {
+                    // Show a few useful fields from /api/v1/me (whatever the relay returns)
+                    foreach (JProperty property in ((JObject)data).Properties().Take(12))
+                    {
+                        if (property.Value.Type == JTokenType.Object || property.Value.Type == JTokenType.Array) continue;
+                        details.Append($"<br/>{HttpUtility.HtmlEncode(property.Name)}: {HttpUtility.HtmlEncode(property.Value.ToString())}");
+                    }
+                }
+            }
+            else
+            {
+                css = result.StatusCode == 403 ? "warning" : "error";
+                summary = "Email Relay: " + (result.Error ?? "ไม่ทราบสาเหตุ") + RelayHint(result.StatusCode);
+            }
+
+            litRelayTest.Text = RenderRelayResult(css, summary, details.ToString(), result);
+            AuditLogger.LogAdminAction(CurrentUserName(), "Test Email Relay", "Settings", GetClientIpAddress(),
+                result.Success ? $"OK, {result.ElapsedMs} ms" : $"HTTP {result.StatusCode}: {result.Error}");
+        }
+
+        protected void btnSendTestEmail_Click(object sender, EventArgs e)
+        {
+            string to = txtTestEmailTo.Text.Trim();
+            if (!IsValidEmail(to))
+            {
+                litRelayTest.Text = "<div class='alert-box error'>กรุณาใส่อีเมลผู้รับที่ถูกต้อง</div>";
+                return;
+            }
+
+            if (!EmailRelayHelper.IsEnabled)
+            {
+                litRelayTest.Text = "<div class='alert-box warning'>Email Relay ยังปิดอยู่: ติ๊ก Enable Email Relay แล้วกด Save Settings ก่อน</div>";
+                return;
+            }
+
+            string by = CurrentUserName();
+            RelayResult result = EmailRelayHelper.SendTestEmail(to, by);
+
+            string css;
+            string summary;
+            string details = "";
+            if (result.Success)
+            {
+                css = "success";
+                summary = $"Relay รับอีเมลแล้ว ส่งไปที่ {to}";
+                details = $"<br/>Message ID: {HttpUtility.HtmlEncode(result.MessageId)}" +
+                          $"<br/>สถานะ: {HttpUtility.HtmlEncode(result.DeliveryStatus)} (queued = อยู่ในคิว จะส่งภายในไม่กี่วินาที ดูผลได้ใน console ของ relay)";
+            }
+            else
+            {
+                css = "error";
+                summary = "ส่งไม่สำเร็จ: " + (result.Error ?? "ไม่ทราบสาเหตุ") + RelayHint(result.StatusCode);
+            }
+
+            litRelayTest.Text = RenderRelayResult(css, summary, details, result);
+            AuditLogger.LogAdminAction(by, "Send Test Email", "Settings", GetClientIpAddress(),
+                result.Success ? $"To: {to}, Id: {result.MessageId}" : $"To: {to}, HTTP {result.StatusCode}: {result.Error}");
+        }
+
+        private static string RelayHint(int statusCode)
+        {
+            switch (statusCode)
+            {
+                case 401: return " (401 = API Key ผิด/หมดอายุ/ถูก revoke หรือลายเซ็นไม่ถูกต้อง)";
+                case 403: return " (403 = IP ของ server นี้ไม่อยู่ใน allow list, scope ไม่พอ, หรือ From/โดเมนผู้รับไม่อนุญาต)";
+                case 409: return " (409 = ข้อความซ้ำถี่เกินไป)";
+                case 422: return " (422 = ไม่มี sender profile หรือ profile ปิดอยู่)";
+                case 429: return " (429 = เกิน rate limit หรือโควต้ารายวัน)";
+                case 502: return " (502 = ตัว API หลัง IIS ไม่ทำงาน)";
+                default: return "";
+            }
+        }
+
+        private static string RenderRelayResult(string css, string summary, string extraHtml, RelayResult result)
+        {
+            var html = new StringBuilder();
+            html.Append($"<div class='alert-box {css}'><strong>{HttpUtility.HtmlEncode(summary)}</strong>");
+            html.Append(extraHtml);
+            if (!string.IsNullOrEmpty(result.Url))
+            {
+                html.Append($"<br/>URL: {HttpUtility.HtmlEncode(result.Url)}");
+            }
+            html.Append($"<br/>เวลา: {result.ElapsedMs:N0} ms");
+            if (!result.Success && !string.IsNullOrEmpty(result.ResponsePreview))
+            {
+                html.Append($"<pre>{HttpUtility.HtmlEncode(result.ResponsePreview)}</pre>");
+            }
+            html.Append("</div>");
+            return html.ToString();
         }
 
         #endregion
