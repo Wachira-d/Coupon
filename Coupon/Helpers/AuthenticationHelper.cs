@@ -239,7 +239,8 @@ namespace Coupon.Helpers
                 }
                 catch (JsonException jsonEx)
                 {
-                    ErrorLogger.LogWarning("Invalid JSON response from API", $"Username: {username}, Response: {responseBody?.Substring(0, Math.Min(200, responseBody?.Length ?? 0))}");
+                    ErrorLogger.LogWarning("Invalid JSON response from API",
+                        $"Username: {username}, StatusCode: {(int)response.StatusCode} {response.StatusCode}, URL: {API_BASE_URL}, Response: {responseBody?.Substring(0, Math.Min(200, responseBody?.Length ?? 0))}");
                     return HandleApiFailure(username, passwordHash, $"Invalid API response: {jsonEx.Message}", ipAddress, userAgent);
                 }
 
